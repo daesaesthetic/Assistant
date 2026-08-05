@@ -34,6 +34,8 @@ export default {
         {
           name: "Moderation",
           value: [
+            "`/clear <amount>` — Delete recent messages (1–100)",
+            "`/nuke [#channel]` — Wipe a channel and recreate it fresh",
             "`/warn` — Issue a warning to a user",
             "`/warnings` — Check a user's warning count",
             "`/clearwarnings` — Clear all warnings for a user",
