@@ -21,7 +21,7 @@ export default {
         )
     )
     .addSubcommand((sub) =>
-      sub.setName("reset").setDescription("Reset the display name back to Azurion")
+      sub.setName("reset").setDescription("Reset the display name back to Assistant")
     )
     .addSubcommand((sub) =>
       sub.setName("view").setDescription("See the current display name for this server")
@@ -67,11 +67,11 @@ export default {
       });
     } else if (sub === "reset") {
       const prev = db.getBotName(guildId);
-      db.setBotName(guildId, "Azurion");
+      db.setBotName(guildId, "Assistant");
       await interaction.reply({
         embeds: [
           createEmbed("Display Name Reset").setDescription(
-            `Display name reset from **${prev}** back to **Azurion**.`
+            `Display name reset from **${prev}** back to **Assistant**.`
           ),
         ],
       });

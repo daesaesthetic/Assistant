@@ -40,6 +40,7 @@ interface DBData {
   conversations: Record<string, ConversationMessage[]>;
   guildConfig: Record<string, GuildConfig>;
   memories: Record<string, string[]>;
+  traits: Record<string, string[]>;
 }
 
 const EMPTY: DBData = {
@@ -48,6 +49,7 @@ const EMPTY: DBData = {
   conversations: {},
   guildConfig: {},
   memories: {},
+  traits: {},
 };
 
 let cache: DBData | null = null;
@@ -58,6 +60,7 @@ function load(): DBData {
     cache = JSON.parse(readFileSync(DB_PATH, "utf8")) as DBData;
     // Back-fill new keys for existing records
     if (!cache.memories) cache.memories = {};
+    if (!cache.traits) cache.traits = {};
   } catch {
     cache = structuredClone(EMPTY);
   }
@@ -147,16 +150,41 @@ export const db = {
     data.guildConfig[guildId] = {
       blacklistedWords: ex?.blacklistedWords ?? [],
       botChannelIds: ex?.botChannelIds ?? [],
-      botName: ex?.botName ?? "Azurion",
+      botName: ex?.botName ?? "Assistant",
       modLogChannelId: ex?.modLogChannelId,
       ...config,
     };
     save(data);
   },
 
+  // ── Traits ────────────────────────────────────────────────────────────────
+  getTraits(userId: string, guildId: string): string[] {
+    return load().traits[`${userId}-${guildId}`] ?? [];
+  },
+  addTrait(userId: string, guildId: string, trait: string): void {
+    const data = load();
+    const key = `${userId}-${guildId}`;
+    const existing = data.traits[key] ?? [];
+    if (!existing.includes(trait)) {
+      data.traits[key] = [...existing, trait].slice(0, 10);
+      save(data);
+    }
+  },
+  removeTrait(userId: string, guildId: string, trait: string): void {
+    const data = load();
+    const key = `${userId}-${guildId}`;
+    data.traits[key] = (data.traits[key] ?? []).filter((t) => t !== trait);
+    save(data);
+  },
+  clearTraits(userId: string, guildId: string): void {
+    const data = load();
+    delete data.traits[`${userId}-${guildId}`];
+    save(data);
+  },
+
   // ── Bot name ──────────────────────────────────────────────────────────────
   getBotName(guildId: string): string {
-    return load().guildConfig[guildId]?.botName || "Azurion";
+    return load().guildConfig[guildId]?.botName || "Assistant";
   },
   setBotName(guildId: string, name: string): void {
     this.setGuildConfig(guildId, { botName: name });

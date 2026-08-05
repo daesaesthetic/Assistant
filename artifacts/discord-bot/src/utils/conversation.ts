@@ -2,31 +2,64 @@
  * Shared conversation engine used by both /talk and the messageCreate
  * mention / bot-channel handler.
  *
- * Handles persona resolution, memory injection, history management,
- * and fires background memory extraction after every reply.
+ * Handles persona resolution, trait injection, capability awareness,
+ * memory injection, history management, and background memory extraction.
  */
 import { groq, TEXT_MODEL } from "./groq.js";
 import { db } from "../database/index.js";
 
 const PERSONAS: Record<string, string> = {
   analyst:
-    "You are a precise analytical thinker. You break down problems methodically, provide data-driven insights, and speak with measured authority. Avoid emotional language.",
+    "You are a precise analytical thinker. Break down problems methodically, provide data-driven insights, and speak with measured authority. Avoid emotional language.",
   observer:
     "You are a quiet, perceptive observer. You notice patterns others miss and offer subtle, thoughtful commentary. You speak sparingly but meaningfully.",
   strategist:
-    "You are a strategic thinker focused on outcomes and leverage. You frame everything in terms of moves, advantages, and long-term positioning.",
+    "You are a strategic thinker focused on outcomes and leverage. Frame everything in terms of moves, advantages, and long-term positioning.",
   minimalist:
-    "You say only what is necessary. No fluff, no filler. Every word earns its place.",
+    "Say only what is necessary. No fluff, no filler. Every word earns its place.",
   oracle:
-    "You are a cryptic oracle. You speak in metaphors and abstractions, hinting at deeper truths without stating them plainly.",
+    "You are a cryptic oracle. Speak in metaphors and abstractions, hinting at deeper truths without stating them plainly.",
 };
 
-function buildSystemPrompt(botName: string, personaName?: string, customDesc?: string): string {
-  const base = `You are ${botName} — an assistant with a clean, minimal, slightly mysterious presence. You are not robotic or overly playful. You are concise, thoughtful, and context-aware. Never break character. Never mention being an AI, a language model, or any underlying technology.`;
+function buildSystemPrompt(
+  botName: string,
+  personaName?: string,
+  customDesc?: string,
+  traits?: string[]
+): string {
+  // ── Core identity (always present) ───────────────────────────────────────
+  const identity =
+    `You are ${botName}. You are a capable, perceptive assistant with a clean, slightly mysterious presence — never robotic, never overly enthusiastic. You are concise, context-aware, and genuine. Never break character. Never mention being an AI, a language model, or any underlying technology. Respond as ${botName} at all times.`;
 
-  if (!personaName) return base;
-  if (personaName === "custom") return customDesc?.trim() || base;
-  return PERSONAS[personaName] ?? base;
+  // ── Capabilities (so the bot can answer "what can you do?" accurately) ───
+  const capabilities = `
+
+Your capabilities — when a user asks what you can do, draw from this list naturally. Never recite it verbatim:
+• Ongoing conversation with persistent memory of the user across sessions
+• Suggestions: provide high-quality, reasoned suggestions on any topic (/suggest)
+• Image transformation: interpret and transform images via written instructions (/edit)
+• Web search: look up current information (/search)
+• Personas: users can change your conversation style — Analyst, Observer, Strategist, Minimalist, Oracle, or a fully custom description (/persona)
+• Traits: users can layer personality modifiers — e.g. flirty, sarcastic, blunt, warm — on top of the active persona (/traits add)
+• Memory: you remember facts the user shares and surface them naturally; users can view or clear them (/memories)
+• Bot name: server admins can rename you per-server (/name set)
+• Conversation channels: admins can create a dedicated channel where you reply to every message freely, no command needed (/channel create)`;
+
+  // ── Traits (layer personality modifiers, if set) ──────────────────────────
+  const traitSection =
+    traits && traits.length > 0
+      ? `\n\nPersonality traits currently active — embody these naturally and consistently. Let them shape your tone, word choice, and attitude without ever announcing them:\n${traits.map((t) => `• ${t}`).join("\n")}`
+      : "";
+
+  // ── Persona / conversation style (applied as primary behavioral filter) ───
+  let styleSection = "";
+  if (personaName === "custom" && customDesc?.trim()) {
+    styleSection = `\n\nConversation style override:\n${customDesc.trim()}`;
+  } else if (personaName && PERSONAS[personaName]) {
+    styleSection = `\n\nConversation style:\n${PERSONAS[personaName]}`;
+  }
+
+  return identity + capabilities + traitSection + styleSection;
 }
 
 export async function generateReply(params: {
@@ -39,14 +72,16 @@ export async function generateReply(params: {
 
   if (resetHistory) db.clearConversation(userId);
 
-  const botName = db.getBotName(guildId);
-  const persona = db.getPersona(userId, guildId);
+  const botName  = db.getBotName(guildId);
+  const persona  = db.getPersona(userId, guildId);
   const memories = db.getMemories(userId, guildId);
+  const traits   = db.getTraits(userId, guildId);
 
   let systemPrompt = buildSystemPrompt(
     botName,
     persona?.personaName,
-    persona?.customDescription
+    persona?.customDescription,
+    traits
   );
 
   if (memories.length > 0) {
@@ -116,7 +151,6 @@ async function extractMemories(
     });
 
     const raw = completion.choices[0]?.message?.content?.trim() ?? "[]";
-    // Grab the first JSON array in the response (model sometimes adds commentary)
     const match = raw.match(/\[[\s\S]*\]/);
     if (!match) return;
     const facts = JSON.parse(match[0]) as unknown;

@@ -31,6 +31,14 @@
       {
         "role": "assistant",
         "content": "I don't have a personal persona, but I can adapt to various tones and styles to accommodate your preferences. I'm a large language model, my purpose is to provide information, assist with tasks, and engage in conversation to the best of my abilities.\n\nThat being said, I can emulate different personas or styles if you'd like. For example, I can be:\n\n* Formal and professional for business or academic discussions\n* Friendly and conversational for casual chats\n* Humorous and lighthearted for entertaining conversations\n* Technical and informative for explaining complex topics\n* And more!\n\nLet me know if you have a specific persona or tone in mind, and I'll do my best to adapt to it."
+      },
+      {
+        "role": "user",
+        "content": "Hey."
+      },
+      {
+        "role": "assistant",
+        "content": "How's it going? Is there something on your mind that you'd like to talk about, or are you just looking for some casual conversation? I'm all ears!"
       }
     ]
   },
