@@ -8,15 +8,17 @@ export default {
     .setDescription("View all available commands organized by category"),
   async execute(interaction: ChatInputCommandInteraction) {
     const embed = createEmbed("Azurion — Commands")
-      .setDescription("All available commands. Heavy commands enforce per-user cooldowns.")
+      .setDescription("All available commands. You can also **@mention** the bot anywhere, or chat freely in a designated conversation channel.")
       .addFields(
         {
-          name: "AI",
+          name: "Conversation",
           value: [
             "`/talk` — Converse with Azurion (maintains memory, 5s cooldown)",
-            "`/suggest` — Get suggestions — text or image (10s cooldown)",
-            "`/edit` — Transform an image with AI instructions (30s cooldown)",
-            "`/persona` — Set your conversation style",
+            "`/suggest` — Get high-quality suggestions — text or image (10s cooldown)",
+            "`/edit` — Transform an image with written instructions (30s cooldown)",
+            "`/persona` — Set your conversation tone and style",
+            "`/memories view` — See what Azurion remembers about you",
+            "`/memories clear` — Wipe your stored memories",
           ].join("\n"),
           inline: false,
         },
@@ -35,7 +37,18 @@ export default {
             "`/warn` — Issue a warning to a user",
             "`/warnings` — Check a user's warning count",
             "`/clearwarnings` — Clear all warnings for a user",
-            "`/config` — Configure bot settings for this server",
+            "`/config` — Server settings (mod log, blacklist)",
+          ].join("\n"),
+          inline: false,
+        },
+        {
+          name: "Server Setup",
+          value: [
+            "`/channel create` — Create a free-conversation channel",
+            "`/channel remove` — Disable auto-response in a channel",
+            "`/channel list` — List all conversation channels",
+            "`/name set` — Set the bot's display name for this server",
+            "`/name reset` — Reset display name to Azurion",
           ].join("\n"),
           inline: false,
         },
@@ -45,7 +58,7 @@ export default {
           inline: false,
         }
       )
-      .setFooter({ text: "Azurion Assistant · Moderation commands require Timeout Members permission" });
+      .setFooter({ text: "Moderation commands require Timeout Members · Setup commands require Manage Server/Channels" });
 
     await interaction.reply({ embeds: [embed] });
   },

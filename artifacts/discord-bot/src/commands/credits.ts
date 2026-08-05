@@ -14,12 +14,12 @@ export default {
         { name: "Username", value: "azurionx", inline: true },
         { name: "Version", value: "1.0.0", inline: true },
         {
-          name: "Powered by",
-          value: "discord.js v14 · Groq (Llama 3.3) · Pollinations.ai · DuckDuckGo",
+          name: "Built with",
+          value: "discord.js v14 · Pollinations.ai · DuckDuckGo",
           inline: false,
         }
       )
-      .setFooter({ text: "Azurion Assistant — Precision. Intelligence. Control." });
+      .setFooter({ text: "Azurion — Precision. Intelligence. Control." });
 
     await interaction.reply({ embeds: [embed] });
   },

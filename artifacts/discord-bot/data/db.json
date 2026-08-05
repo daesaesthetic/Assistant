@@ -1,0 +1,17 @@
+{
+  "personas": {},
+  "warnings": {},
+  "conversations": {
+    "1167370329165938688": [
+      {
+        "role": "user",
+        "content": "testing, how are you?"
+      },
+      {
+        "role": "assistant",
+        "content": "I'm functional and ready to assist. No personal experiences or emotions to report. How can I help you today?"
+      }
+    ]
+  },
+  "guildConfig": {}
+}
