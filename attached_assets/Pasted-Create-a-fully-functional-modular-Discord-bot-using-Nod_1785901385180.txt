@@ -1,0 +1,193 @@
+Create a fully functional, modular Discord bot using **Node.js with discord.js v14** (or Python with discord.py if preferred). The bot should be cleanly structured, scalable, and production-ready, using **only free and reliable APIs** wherever possible.
+
+BOT NAME: Azurion Assistant
+
+---
+
+## CORE REQUIREMENTS
+
+* Use **slash commands only**
+* Use **embeds** for structured responses
+* Include **robust error handling** for all commands
+* Store API keys securely using environment variables
+* Organize commands into separate modules/files
+* Include a lightweight database (JSON or SQLite) for user data and tracking
+* Maintain a **clean, minimal, slightly mysterious tone** in responses (not overly robotic or playful)
+
+---
+
+## COMMANDS & FEATURES
+
+1. /suggest
+
+* Inputs:
+
+  * query (required text)
+  * optional image attachment
+* Behavior:
+
+  * If text only: generate high-quality, relevant suggestions
+  * If image included: analyze the image and provide contextual suggestions
+* Output:
+
+  * Embed titled "Suggestions"
+  * Clear bullet points
+  * Optional reasoning section
+
+2. /search
+
+* Inputs:
+
+  * query (string)
+* Behavior:
+
+  * Use a **free, reliable search API** (Brave Search API or similar)
+  * Return summarized, useful results from trustworthy sources
+  * Avoid spammy or low-quality sites
+* Output:
+
+  * Embed with 3–5 results including title, short summary, and link
+  * Footer disclaimer about source accuracy
+
+3. /talk
+
+* Inputs:
+
+  * message (string)
+* Behavior:
+
+  * Natural conversational AI using a **free LLM API**
+  * Maintain short-term memory per user
+  * Responses should feel intelligent, calm, and concise
+* Output:
+
+  * Clean response (embed optional)
+
+4. /persona
+
+* Inputs:
+
+  * persona name OR "custom"
+  * optional custom description if "custom" is selected
+* Behavior:
+
+  * Allow users to select from predefined personas (e.g., Analyst, Observer, Strategist, Minimalist, Oracle)
+  * If "custom" is chosen, let the user define their own tone/style
+  * Store selected persona per user
+  * All `/talk` responses adapt to the selected persona
+* Output:
+
+  * Confirmation embed showing active persona and description
+
+5. /edit
+
+* Inputs:
+
+  * image attachment (required)
+  * instructions (text)
+* Behavior:
+
+  * Use a **free image editing/generation API**
+  * Apply edits based on instructions (e.g., lighting, effects, background changes)
+* Output:
+
+  * Edited image + short caption
+
+6. /say
+
+* Inputs:
+
+  * message (string)
+* Behavior:
+
+  * Bot sends the exact message independently
+* Safety:
+
+  * Block abuse (e.g., @everyone, @here unless admin permission)
+
+7. /profile
+
+* Inputs:
+
+  * user mention
+* Behavior:
+
+  * Display a clean embed profile including:
+
+    * Username
+    * Avatar
+    * Account creation date
+    * Server join date
+    * Optional tracked stats
+* Output:
+
+  * Modern, minimal embed
+
+8. /commands
+
+* Behavior:
+
+  * Display all available commands grouped by category
+* Output:
+
+  * Organized embed with short descriptions
+
+9. /credits
+
+* Behavior:
+
+  * Display creator information
+* Output:
+
+  * Embed:
+
+    * Created by Azurion
+    * Username: azurionx
+    * Styled cleanly
+
+---
+
+## AUTOMOD FEATURES
+
+* Detect and handle:
+
+  * Spam (rapid repeated messages)
+  * Excessive capitalization
+  * Blacklisted words (configurable list)
+* Warning system:
+
+  * Track warnings per user
+  * Apply timeout after threshold
+* Log all moderation actions in a designated channel
+
+---
+
+## TECHNICAL STRUCTURE
+
+* Recommended folder structure:
+  /commands
+  /events
+  /utils
+  /database
+  main file (index.js or main.py)
+
+* Include:
+
+  * Slash command handler
+  * Event listeners (interactionCreate, messageCreate)
+  * Cooldowns for heavy commands (/talk, /edit, /search)
+
+---
+
+## EXTRA QUALITY FEATURES
+
+* Show typing indicators for AI responses
+* Optimize async handling for fast responses
+* Keep embed design consistent (dark, minimal, modern)
+* Ensure persona system integrates seamlessly with conversation flow
+
+---
+
+## FINAL GOAL
+
+The bot should feel like a **polished, intelligent assistant with personality control**, not just a collection of tools. Responses should be concise, visually clean, and context-aware, with subtle depth and adaptability based on user-selected personas.
