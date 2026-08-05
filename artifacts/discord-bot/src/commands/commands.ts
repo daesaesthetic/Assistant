@@ -30,12 +30,22 @@ export default {
           inline: false,
         },
         {
+          name: "Moderation",
+          value: [
+            "`/warn` — Issue a warning to a user",
+            "`/warnings` — Check a user's warning count",
+            "`/clearwarnings` — Clear all warnings for a user",
+            "`/config` — Configure bot settings for this server",
+          ].join("\n"),
+          inline: false,
+        },
+        {
           name: "Info",
           value: ["`/commands` — This list", "`/credits` — Creator information"].join("\n"),
           inline: false,
         }
       )
-      .setFooter({ text: "Azurion Assistant · Use responsibly" });
+      .setFooter({ text: "Azurion Assistant · Moderation commands require Timeout Members permission" });
 
     await interaction.reply({ embeds: [embed] });
   },

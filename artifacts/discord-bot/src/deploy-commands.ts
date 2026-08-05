@@ -44,6 +44,10 @@ const guildId = process.env.DISCORD_GUILD_ID;
 
 let result: unknown[];
 if (guildId) {
+  // Clear any lingering global commands first to avoid duplicates in the UI
+  await rest.put(Routes.applicationCommands(clientId), { body: [] });
+  console.log("[Deploy] Cleared global commands.");
+
   console.log(`\n[Deploy] Registering ${commands.length} commands to guild ${guildId} (instant)...`);
   result = (await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
     body: commands,
