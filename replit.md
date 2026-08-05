@@ -1,36 +1,61 @@
-# [Project name]
+# Azurion Assistant — Discord Bot
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A fully modular Discord bot built with discord.js v14. Features slash commands, AI-powered conversation (Groq/Llama 3.3), image generation (Pollinations.ai), web search (DuckDuckGo), persona system, and AutoMod.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm --filter @workspace/discord-bot run dev` — start the bot
+- `pnpm --filter @workspace/discord-bot run deploy` — register slash commands with Discord (run once after changes)
+- `pnpm --filter @workspace/discord-bot run typecheck` — TypeScript check
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Discord: discord.js v14
+- LLM: Groq API (llama-3.3-70b-versatile for text, llama-4-scout for vision)
+- Image generation: Pollinations.ai (free, no key)
+- Search: DuckDuckGo HTML (free, no key)
+- DB: JSON file store (`artifacts/discord-bot/data/db.json`)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/discord-bot/src/commands/` — one file per slash command
+- `artifacts/discord-bot/src/events/` — Discord event handlers
+- `artifacts/discord-bot/src/utils/` — Groq client, embeds, cooldowns, search
+- `artifacts/discord-bot/src/database/index.ts` — JSON-backed DB
+- `artifacts/discord-bot/data/db.json` — runtime data (personas, warnings, conversations)
 
-## Architecture decisions
+## Commands
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+| Command | Description | Cooldown |
+|---|---|---|
+| `/talk` | AI conversation with memory and persona | 5s |
+| `/suggest` | Smart suggestions, supports image input | 10s |
+| `/edit` | AI image transformation via Pollinations | 30s |
+| `/persona` | Set conversation style (5 presets + custom) | — |
+| `/search` | Web search via DuckDuckGo | 10s |
+| `/profile` | User profile with tracked stats | — |
+| `/say` | Bot sends a message | — |
+| `/commands` | Command list | — |
+| `/credits` | Creator info | — |
 
-## Product
+## AutoMod
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Detects spam (5 msgs/5s), excessive caps (>70%), and blacklisted words. Issues warnings; applies 10-min timeout at 3 warnings. Logs to configurable mod channel.
+
+## Required Secrets
+
+- `DISCORD_BOT_TOKEN` — bot login token
+- `DISCORD_CLIENT_ID` — application ID
+- `GROQ_API_KEY` — free at console.groq.com
+
+## Setup Steps
+
+1. Add secrets (already done via Replit Secrets)
+2. Enable **Message Content Intent** and **Server Members Intent** in Discord Developer Portal → Bot settings
+3. Start the bot workflow — it connects to Discord
+4. Run `pnpm --filter @workspace/discord-bot run deploy` once to register slash commands
+5. Global commands take up to 1 hour to propagate (use guild commands for instant testing)
 
 ## User preferences
 
@@ -38,8 +63,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- After changing any command's name/options, re-run `deploy` to push updates to Discord
+- The `MessageContent` privileged intent must be enabled in the Developer Portal or automod won't work
+- The `GuildMembers` privileged intent is required for `/profile` and member timeouts
+- JSON DB reads/writes are synchronous — fine for a bot, avoid high-concurrency patterns
