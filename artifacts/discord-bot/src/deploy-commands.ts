@@ -39,11 +39,21 @@ for (const file of files) {
 
 const rest = new REST({ version: "10" }).setToken(token);
 
-console.log(`\n[Deploy] Registering ${commands.length} slash commands globally...`);
-const result = (await rest.put(Routes.applicationCommands(clientId), {
-  body: commands,
-})) as unknown[];
+// If DISCORD_GUILD_ID is set, register instantly to that guild; otherwise register globally.
+const guildId = process.env.DISCORD_GUILD_ID;
 
-console.log(`[Deploy] ✓ Registered ${result.length} command(s) globally.`);
-console.log("[Deploy] Note: Global commands can take up to 1 hour to propagate.");
-console.log("[Deploy] For instant registration, switch to applicationGuildCommands().");
+let result: unknown[];
+if (guildId) {
+  console.log(`\n[Deploy] Registering ${commands.length} commands to guild ${guildId} (instant)...`);
+  result = (await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
+    body: commands,
+  })) as unknown[];
+  console.log(`[Deploy] ✓ Registered ${result.length} command(s) to guild — visible immediately.`);
+} else {
+  console.log(`\n[Deploy] Registering ${commands.length} slash commands globally...`);
+  result = (await rest.put(Routes.applicationCommands(clientId), {
+    body: commands,
+  })) as unknown[];
+  console.log(`[Deploy] ✓ Registered ${result.length} command(s) globally.`);
+  console.log("[Deploy] Note: Global commands can take up to 1 hour to propagate.");
+}

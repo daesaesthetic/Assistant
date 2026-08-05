@@ -38,3 +38,8 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+DISCORD_GUILD_ID = "1533969066211938324"
