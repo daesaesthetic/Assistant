@@ -15,7 +15,7 @@ export default {
         { name: "Version", value: "1.0.0", inline: true },
         {
           name: "Built with",
-          value: "discord.js v14 · Pollinations.ai · DuckDuckGo",
+          value: "discord.js v14 · DuckDuckGo",
           inline: false,
         }
       )

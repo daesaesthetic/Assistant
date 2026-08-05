@@ -6,7 +6,7 @@ import type { Command } from "../types.js";
 export default {
   data: new SlashCommandBuilder()
     .setName("edit")
-    .setDescription("Transform or modify an image using AI instructions")
+    .setDescription("Transform or modify an image with written instructions")
     .addAttachmentOption((opt) =>
       opt.setName("image").setDescription("The image to edit").setRequired(true)
     )
@@ -68,7 +68,7 @@ export default {
       const embed = createEmbed("Image Edit")
         .setDescription(`**Instructions:** ${instructions}`)
         .setImage("attachment://edited.png")
-        .setFooter({ text: "Generated via Pollinations.ai · Results may vary" });
+        .setFooter({ text: "Image generation · Results may vary" });
 
       await interaction.editReply({ embeds: [embed], files: [attachment] });
     } catch (err) {
