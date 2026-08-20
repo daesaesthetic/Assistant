@@ -55,10 +55,10 @@ export default {
       await cloned.setPosition(target.position).catch(() => {});
 
       // If the nuked channel was a bot channel, transfer that to the new one
-      const botChannels = db.getBotChannels(guildId);
+      const botChannels = await db.getBotChannels(guildId);
       if (botChannels.includes(target.id)) {
-        db.removeBotChannel(guildId, target.id);
-        db.addBotChannel(guildId, cloned.id);
+        await db.removeBotChannel(guildId, target.id);
+        await db.addBotChannel(guildId, cloned.id);
       }
 
       // Delete the original

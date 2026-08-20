@@ -72,7 +72,7 @@ export default {
 
     // ── /config view ─────────────────────────────────────────────────────────
     if (sub === "view") {
-      const cfg = db.getGuildConfig(guildId);
+      const cfg = await db.getGuildConfig(guildId);
       const modlog = cfg?.modLogChannelId ? `<#${cfg.modLogChannelId}>` : "Not set";
       const words = cfg?.blacklistedWords?.length
         ? cfg.blacklistedWords.map((w) => `\`${w}\``).join(", ")
@@ -92,7 +92,7 @@ export default {
     // ── /config modlog ────────────────────────────────────────────────────────
     if (sub === "modlog") {
       const channel = interaction.options.getChannel("channel", true);
-      db.setGuildConfig(guildId, { modLogChannelId: channel.id });
+      await db.setGuildConfig(guildId, { modLogChannelId: channel.id });
 
       await interaction.reply({
         embeds: [
@@ -107,7 +107,7 @@ export default {
 
     // ── /config blacklist ────────────────────────────────────────────────────
     if (group === "blacklist") {
-      const cfg = db.getGuildConfig(guildId);
+      const cfg = await db.getGuildConfig(guildId);
       const words: string[] = cfg?.blacklistedWords ?? [];
 
       if (sub === "add") {
@@ -120,7 +120,7 @@ export default {
           return;
         }
         words.push(word);
-        db.setGuildConfig(guildId, { blacklistedWords: words });
+        await db.setGuildConfig(guildId, { blacklistedWords: words });
         await interaction.reply({
           embeds: [createEmbed("Blocklist Updated").setDescription(`Added \`${word}\` to the blocklist.`)],
           ephemeral: true,
@@ -136,7 +136,7 @@ export default {
           return;
         }
         words.splice(idx, 1);
-        db.setGuildConfig(guildId, { blacklistedWords: words });
+        await db.setGuildConfig(guildId, { blacklistedWords: words });
         await interaction.reply({
           embeds: [createEmbed("Blocklist Updated").setDescription(`Removed \`${word}\` from the blocklist.`)],
           ephemeral: true,

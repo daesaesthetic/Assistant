@@ -35,7 +35,7 @@ export default {
       return;
     }
 
-    const warningData = db.addWarning(target.id, guildId);
+    const warningData = await db.addWarning(target.id, guildId);
     const count = warningData.count;
     const timedOut = count >= WARNING_THRESHOLD;
 
@@ -44,7 +44,7 @@ export default {
       const member = await interaction.guild.members.fetch(target.id).catch(() => null);
       if (member?.moderatable) {
         await member.timeout(TIMEOUT_MS, `Manual warn by ${interaction.user.tag}: ${reason}`).catch(() => {});
-        db.resetWarnings(target.id, guildId);
+        await db.resetWarnings(target.id, guildId);
       }
     }
 
@@ -58,7 +58,7 @@ export default {
     await interaction.reply({ embeds: [embed] });
 
     // Log to mod channel
-    const cfg = db.getGuildConfig(guildId);
+    const cfg = await db.getGuildConfig(guildId);
     if (cfg?.modLogChannelId) {
       const logCh = interaction.guild?.channels.cache.get(cfg.modLogChannelId) as TextChannel | undefined;
       if (logCh?.isTextBased()) {

@@ -15,11 +15,11 @@ export const conversationStore = {
     return db.getConversation(context.userId, context.guildId);
   },
 
-  setHistory(context: ConversationContext, messages: Parameters<typeof db.setConversation>[2]) {
-    db.setConversation(context.userId, context.guildId, messages);
+  async setHistory(context: ConversationContext, messages: Parameters<typeof db.setConversation>[2]) {
+    await db.setConversation(context.userId, context.guildId, messages);
   },
 
-  reset(context: ConversationContext) {
-    db.clearConversation(context.userId, context.guildId);
+  async reset(context: ConversationContext) {
+    await db.clearConversation(context.userId, context.guildId);
   },
 };

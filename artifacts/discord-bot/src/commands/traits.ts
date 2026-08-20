@@ -48,7 +48,7 @@ export default {
 
     if (sub === "add") {
       const trait = interaction.options.getString("trait", true).toLowerCase().trim();
-      const current = db.getTraits(userId, guildId);
+      const current = await db.getTraits(userId, guildId);
 
       if (current.includes(trait)) {
         await interaction.reply({
@@ -66,8 +66,8 @@ export default {
         return;
       }
 
-      db.addTrait(userId, guildId, trait);
-      const updated = db.getTraits(userId, guildId);
+      await db.addTrait(userId, guildId, trait);
+      const updated = await db.getTraits(userId, guildId);
 
       await interaction.reply({
         embeds: [
@@ -80,7 +80,7 @@ export default {
 
     else if (sub === "remove") {
       const trait = interaction.options.getString("trait", true).toLowerCase().trim();
-      const current = db.getTraits(userId, guildId);
+      const current = await db.getTraits(userId, guildId);
 
       if (!current.includes(trait)) {
         await interaction.reply({
@@ -90,8 +90,8 @@ export default {
         return;
       }
 
-      db.removeTrait(userId, guildId, trait);
-      const updated = db.getTraits(userId, guildId);
+      await db.removeTrait(userId, guildId, trait);
+      const updated = await db.getTraits(userId, guildId);
 
       await interaction.reply({
         embeds: [
@@ -106,7 +106,7 @@ export default {
     }
 
     else if (sub === "list") {
-      const traits = db.getTraits(userId, guildId);
+      const traits = await db.getTraits(userId, guildId);
       await interaction.reply({
         embeds: [
           traits.length
@@ -121,7 +121,7 @@ export default {
     }
 
     else if (sub === "clear") {
-      const current = db.getTraits(userId, guildId);
+      const current = await db.getTraits(userId, guildId);
       if (!current.length) {
         await interaction.reply({
           embeds: [createErrorEmbed("You have no traits to clear.")],
@@ -129,7 +129,7 @@ export default {
         });
         return;
       }
-      db.clearTraits(userId, guildId);
+      await db.clearTraits(userId, guildId);
       await interaction.reply({
         embeds: [
           createEmbed("Traits Cleared").setDescription(

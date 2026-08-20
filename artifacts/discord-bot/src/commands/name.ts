@@ -32,7 +32,7 @@ export default {
     const sub = interaction.options.getSubcommand();
 
     if (sub === "view") {
-      const current = db.getBotName(guildId);
+      const current = await db.getBotName(guildId);
       await interaction.reply({
         embeds: [createEmbed("Display Name").setDescription(`Current name: **${current}**`)],
         ephemeral: true,
@@ -55,7 +55,7 @@ export default {
         await interaction.reply({ embeds: [createErrorEmbed("Name cannot be blank.")], ephemeral: true });
         return;
       }
-      db.setBotName(guildId, name);
+      await db.setBotName(guildId, name);
       await interaction.reply({
         embeds: [
           createEmbed("Display Name Updated")
@@ -66,8 +66,8 @@ export default {
         ],
       });
     } else if (sub === "reset") {
-      const prev = db.getBotName(guildId);
-      db.setBotName(guildId, "Assistant");
+      const prev = await db.getBotName(guildId);
+      await db.setBotName(guildId, "Assistant");
       await interaction.reply({
         embeds: [
           createEmbed("Display Name Reset").setDescription(

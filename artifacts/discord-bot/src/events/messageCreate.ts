@@ -23,7 +23,7 @@ export default {
 
     const userId = message.author.id;
     const guildId = message.guild.id;
-    const guildConfig = db.getGuildConfig(guildId);
+    const guildConfig = await db.getGuildConfig(guildId);
     const botUser = message.client.user;
 
     // ── Automod ───────────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ export default {
       // Delete, warn, possibly timeout, log
       await message.delete().catch(() => {});
 
-      const warningData = db.addWarning(userId, guildId);
+      const warningData = await db.addWarning(userId, guildId);
       const count = warningData.count;
       const timedOut = count >= WARNING_THRESHOLD;
 
@@ -78,7 +78,7 @@ export default {
         await message.member
           .timeout(TIMEOUT_MS, `Automod: exceeded warning threshold (${violation})`)
           .catch(() => {});
-        db.resetWarnings(userId, guildId);
+        await db.resetWarnings(userId, guildId);
       }
 
       const modChannelId = guildConfig?.modLogChannelId;

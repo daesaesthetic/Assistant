@@ -53,7 +53,7 @@ export default {
       return;
     }
 
-    db.setPersona(userId, guildId, name, name === "custom" ? customDesc : "");
+    await db.setPersona(userId, guildId, name, name === "custom" ? customDesc : "");
 
     const displayName =
       name === "custom" ? "Custom" : name.charAt(0).toUpperCase() + name.slice(1);

@@ -73,12 +73,12 @@ export async function generateReply(params: {
 
   const context = { userId, guildId };
 
-  if (resetHistory) conversationStore.reset(context);
+  if (resetHistory) await conversationStore.reset(context);
 
-  const botName  = db.getBotName(guildId);
-  const persona  = db.getPersona(userId, guildId);
-  const memories = db.getMemories(userId, guildId);
-  const traits   = db.getTraits(userId, guildId);
+  const botName  = await db.getBotName(guildId);
+  const persona  = await db.getPersona(userId, guildId);
+  const memories = await db.getMemories(userId, guildId);
+  const traits   = await db.getTraits(userId, guildId);
 
   let systemPrompt = buildSystemPrompt(
     botName,
@@ -93,7 +93,7 @@ export async function generateReply(params: {
       memories.map((m) => `- ${m}`).join("\n");
   }
 
-  const history = conversationStore.getHistory(context);
+  const history = await conversationStore.getHistory(context);
   const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
     { role: "system", content: systemPrompt },
     ...history,
@@ -114,7 +114,7 @@ export async function generateReply(params: {
     { role: "user" as const, content },
     { role: "assistant" as const, content: response },
   ].slice(-20);
-  conversationStore.setHistory(context, updatedHistory);
+  await conversationStore.setHistory(context, updatedHistory);
 
   // Fire memory extraction in the background — never blocks the reply
   void extractMemories(userId, guildId, content, response);
@@ -158,7 +158,7 @@ async function extractMemories(
     if (!match) return;
     const facts = JSON.parse(match[0]) as unknown;
     if (Array.isArray(facts) && facts.length > 0) {
-      db.addMemories(userId, guildId, facts.filter((f): f is string => typeof f === "string"));
+      await db.addMemories(userId, guildId, facts.filter((f): f is string => typeof f === "string"));
     }
   } catch {
     // Memory extraction is non-critical — fail silently

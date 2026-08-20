@@ -24,7 +24,7 @@ export default {
     const sub = interaction.options.getSubcommand();
 
     if (sub === "view") {
-      const memories = db.getMemories(userId, guildId);
+      const memories = await db.getMemories(userId, guildId);
 
       if (memories.length === 0) {
         await interaction.reply({
@@ -52,7 +52,7 @@ export default {
         ephemeral: true,
       });
     } else if (sub === "clear") {
-      const memories = db.getMemories(userId, guildId);
+      const memories = await db.getMemories(userId, guildId);
       if (memories.length === 0) {
         await interaction.reply({
           embeds: [createErrorEmbed("You have no memories to clear.")],
@@ -61,7 +61,7 @@ export default {
         return;
       }
 
-      db.clearMemories(userId, guildId);
+      await db.clearMemories(userId, guildId);
 
       await interaction.reply({
         embeds: [

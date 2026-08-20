@@ -21,8 +21,8 @@ export default {
         ? await interaction.guild.members.fetch(target.id).catch(() => null)
         : null;
 
-      const warnings = db.getWarnings(target.id, guildId);
-      const persona = db.getPersona(target.id, guildId);
+      const warnings = await db.getWarnings(target.id, guildId);
+      const persona = await db.getPersona(target.id, guildId);
 
       const embed = createEmbed(
         member?.displayName ?? target.username,

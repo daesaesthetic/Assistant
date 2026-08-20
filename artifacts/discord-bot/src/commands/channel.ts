@@ -68,7 +68,7 @@ export default {
         .create({
           name: channelName || "azurion",
           type: ChannelType.GuildText,
-          topic: `${db.getBotName(guildId)}'s space — chat freely here.`,
+          topic: `${await db.getBotName(guildId)}'s space — chat freely here.`,
           permissionOverwrites: [
             {
               id: guild.id,
@@ -89,13 +89,13 @@ export default {
         return;
       }
 
-      db.addBotChannel(guildId, channel.id);
+      await db.addBotChannel(guildId, channel.id);
 
       await interaction.editReply({
         embeds: [
           createEmbed("Channel Created")
             .setDescription(
-              `<#${channel.id}> is now a conversation channel.\n${db.getBotName(guildId)} will respond to every message sent there — no commands needed.`
+              `<#${channel.id}> is now a conversation channel.\n${await db.getBotName(guildId)} will respond to every message sent there — no commands needed.`
             )
             .setFooter({ text: "Use /channel remove to revert." }),
         ],
@@ -105,7 +105,7 @@ export default {
     // ── remove ────────────────────────────────────────────────────────────────
     else if (sub === "remove") {
       const target = interaction.options.getChannel("channel", true);
-      const current = db.getBotChannels(guildId);
+      const current = await db.getBotChannels(guildId);
       if (!current.includes(target.id)) {
         await interaction.reply({
           embeds: [createErrorEmbed(`<#${target.id}> is not a bot conversation channel.`)],
@@ -113,7 +113,7 @@ export default {
         });
         return;
       }
-      db.removeBotChannel(guildId, target.id);
+      await db.removeBotChannel(guildId, target.id);
       await interaction.reply({
         embeds: [
           createEmbed("Channel Removed").setDescription(
@@ -126,7 +126,7 @@ export default {
 
     // ── list ──────────────────────────────────────────────────────────────────
     else if (sub === "list") {
-      const channels = db.getBotChannels(guildId);
+      const channels = await db.getBotChannels(guildId);
       const display = channels.length
         ? channels.map((id) => `<#${id}>`).join("\n")
         : "No conversation channels configured.\nUse `/channel create` to set one up.";

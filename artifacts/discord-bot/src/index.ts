@@ -3,8 +3,11 @@ import { readdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import type { ExtendedClient, Command, Event } from "./types.js";
+import { initializeDatabase } from "./database/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+await initializeDatabase();
 
 // ── Client setup ─────────────────────────────────────────────────────────────
 const client = new Client({

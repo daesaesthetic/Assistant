@@ -25,7 +25,7 @@ export default {
       return;
     }
 
-    const data = db.getWarnings(target.id, guildId);
+    const data = await db.getWarnings(target.id, guildId);
     const count = data?.count ?? 0;
     const lastWarned = data?.lastWarned
       ? `<t:${Math.floor(data.lastWarned / 1000)}:R>`

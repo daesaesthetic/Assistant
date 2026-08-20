@@ -23,7 +23,7 @@ export default {
     const target = interaction.options.getUser("user", true);
     const guildId = interaction.guildId!;
 
-    const before = db.getWarnings(target.id, guildId);
+    const before = await db.getWarnings(target.id, guildId);
     if (!before || before.count === 0) {
       await interaction.reply({
         embeds: [createErrorEmbed(`<@${target.id}> has no warnings to clear.`)],
@@ -32,7 +32,7 @@ export default {
       return;
     }
 
-    db.resetWarnings(target.id, guildId);
+    await db.resetWarnings(target.id, guildId);
 
     await interaction.reply({
       embeds: [
@@ -43,7 +43,7 @@ export default {
     });
 
     // Log to mod channel
-    const cfg = db.getGuildConfig(guildId);
+    const cfg = await db.getGuildConfig(guildId);
     if (cfg?.modLogChannelId) {
       const logCh = interaction.guild?.channels.cache.get(cfg.modLogChannelId) as TextChannel | undefined;
       if (logCh?.isTextBased()) {

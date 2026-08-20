@@ -1,0 +1,446 @@
+# ASSISTANT BOT — PHASE 1.2
+## SQLITE DATABASE MIGRATION
+
+We are continuing modernization of the existing Discord Assistant bot.
+
+Phase 1.1 is complete: conversation history is now isolated by USER + GUILD.
+
+This phase replaces the current JSON persistence system with SQLite.
+
+IMPORTANT:
+This is a persistence-layer migration only.
+
+Do NOT add new user-facing features.
+Do NOT redesign AI behavior.
+Do NOT redesign memory, personas, traits, profiles, moderation, or commands.
+Do NOT change existing behavior unless required for database integration.
+Do NOT migrate or rewrite unrelated systems unnecessarily.
+
+The goal is:
+
+CURRENT JSON
+→ SAFE MIGRATION
+→ SQLITE
+→ EXISTING BOT FUNCTIONALITY
+
+Preserve all existing data and behavior.
+
+---
+
+## 1. AUDIT THE CURRENT STORAGE
+
+Before changing anything, inspect the actual codebase and identify:
+
+- JSON database files and structure
+- every read/write operation
+- users
+- guilds
+- memories
+- personas
+- traits
+- conversations
+- warnings
+- guild configuration
+- any other persistent data
+
+Do not rely solely on previous audit results; verify the source code.
+
+Create a mapping from existing JSON data to the new SQLite schema.
+
+---
+
+## 2. SQLITE
+
+Use a lightweight, reliable SQLite library compatible with the existing Node.js/TypeScript project and Replit.
+
+Avoid introducing a large ORM or unnecessary framework.
+
+The database must support:
+
+- transactions
+- parameterized queries
+- persistence
+- appropriate async/non-blocking access
+
+Explain the library selected and why.
+
+---
+
+## 3. DATABASE ABSTRACTION
+
+Create a centralized database layer.
+
+Commands and events should not contain scattered raw SQL.
+
+Use small application-level services/functions where appropriate, such as:
+
+- conversation access
+- memory access
+- guild configuration
+- warnings
+
+Do not over-engineer this.
+
+The abstraction must make future database changes easier.
+
+---
+
+## 4. SQLITE SCHEMA
+
+Design a normalized schema based on the ACTUAL existing data.
+
+At minimum, create appropriate tables for applicable existing entities such as:
+
+- users
+- guilds
+- user/guild settings
+- memories
+- personas
+- traits
+- conversations
+- conversation messages
+- warnings
+- guild configuration
+
+Do not create unnecessary tables.
+
+Discord user IDs and guild IDs must be stored safely as strings.
+
+Use foreign keys and unique constraints where appropriate.
+
+Add indexes for actual frequent lookups such as:
+
+- user ID
+- guild ID
+- user + guild
+- conversations
+- conversation messages
+- memories
+- warnings
+
+Do not over-index.
+
+---
+
+## 5. CONVERSATION SCOPE
+
+Preserve the architecture from Phase 1.1.
+
+Conversation data MUST remain isolated by:
+
+USER + GUILD
+
+Example:
+
+User A + Guild 123 → Conversation A
+User A + Guild 456 → Conversation B
+
+These must never share context.
+
+Leave the schema capable of supporting future conversation/session IDs, but do not implement advanced sessions yet.
+
+---
+
+## 6. MIGRATION
+
+Create a safe migration from the existing JSON database into SQLite.
+
+Preserve all applicable existing data:
+
+- users
+- guilds
+- memories
+- personas
+- traits
+- conversations
+- conversation messages
+- warnings
+- guild configuration
+- any other persistent data discovered during the audit
+
+Do not invent missing data.
+
+If legacy conversation data lacks a guild ID:
+
+- do not assign an arbitrary guild
+- do not silently discard it
+- preserve it safely if possible
+- report it as ambiguous
+
+The migration must preserve the Phase 1.1 USER + GUILD conversation architecture.
+
+---
+
+## 7. MIGRATION SAFETY
+
+Before migration:
+
+- create a backup of the original JSON database
+- never modify or delete the original source data
+- ensure the migration cannot accidentally duplicate records
+- use stable Discord IDs and unique constraints
+- make migration idempotent or otherwise safely repeatable
+
+If migration fails, the original JSON data must remain recoverable.
+
+Do not claim migration success if validation fails.
+
+---
+
+## 8. DATABASE MIGRATIONS
+
+Implement schema versioning/migrations so future schema changes can be applied safely.
+
+Do not rely only on CREATE TABLE IF NOT EXISTS.
+
+The database should support future migrations without destroying existing data.
+
+Document the migration mechanism.
+
+---
+
+## 9. INITIALIZATION
+
+On startup:
+
+1. Open/create SQLite.
+2. Initialize required SQLite settings.
+3. Apply schema migrations.
+4. Verify the schema.
+5. Only then start the Discord bot.
+
+If database initialization fails, fail clearly rather than starting with partially working persistence.
+
+Use a persistent Replit project path, not a temporary directory.
+
+---
+
+## 10. PRESERVE EXISTING FUNCTIONALITY
+
+Existing commands and systems must continue working, including:
+
+- `/talk`
+- automatic mention responses
+- `/talk reset`
+- `/memories`
+- `/persona`
+- `/personality`
+- `/traits`
+- `/name`
+- `/suggest`
+- `/search`
+- `/edit`
+- `/config`
+- `/channel`
+- `/say`
+- `/warn`
+- `/warnings`
+- `/clearwarnings`
+- `/clear`
+- `/nuke`
+- `/profile`
+- `/commands`
+- `/credits`
+
+Do not redesign these features.
+
+---
+
+## 11. RESET BEHAVIOR
+
+Preserve the Phase 1.1 reset behavior.
+
+`/talk reset` must only clear the current USER + GUILD conversation.
+
+It must NOT remove:
+
+- memories
+- persona
+- traits
+- warnings
+- guild configuration
+- conversations belonging to other guilds
+
+---
+
+## 12. DATA VALIDATION
+
+After migration, compare JSON and SQLite.
+
+Verify applicable counts for:
+
+- users
+- guilds
+- memories
+- personas
+- traits
+- conversations
+- conversation messages
+- warnings
+- guild configuration
+
+Report:
+
+- imported
+- matched
+- missing
+- duplicates
+- ambiguous
+- failed
+
+Do not silently ignore mismatches.
+
+---
+
+## 13. TESTING
+
+Test at minimum:
+
+### Migration
+Existing JSON data imports correctly.
+
+### Repeat migration
+Running migration again does not create duplicates.
+
+### Restart
+Data remains after restarting the bot.
+
+### Conversation isolation
+Same user in two guilds receives only the correct guild's conversation.
+
+### Reset
+Resetting Guild A does not affect Guild B.
+
+### Existing systems
+Verify memories, persona, traits, warnings, configuration, and `/talk` still work.
+
+### Failure handling
+Test missing/malformed records and database failures.
+
+### Startup
+Bot only starts after successful database initialization.
+
+Run existing type checks/tests as well.
+
+---
+
+## 14. SECURITY
+
+Use parameterized SQL.
+
+Never interpolate user-controlled values directly into SQL.
+
+Do not expose:
+
+- SQL statements
+- database paths
+- stack traces
+- secrets
+- private memory contents
+- private conversation contents
+
+in user-facing responses.
+
+Preserve all existing permission checks.
+
+---
+
+## 15. PERFORMANCE
+
+Do not load the entire database into memory.
+
+Avoid rewriting the entire database for individual changes.
+
+Use transactions for multi-step operations where appropriate.
+
+Avoid unnecessary repeated queries.
+
+Do not introduce synchronous/blocking database operations into normal bot execution.
+
+---
+
+## 16. ROLLBACK
+
+Do not delete the original JSON database after migration.
+
+Keep the migration backup.
+
+Document how the bot can be reverted to the previous JSON persistence system if the SQLite migration is determined to be faulty.
+
+Do not automatically perform a rollback unless migration fails validation.
+
+---
+
+## 17. SCOPE CONTROL
+
+Do NOT modify these systems beyond what is necessary to connect them to SQLite:
+
+- AI prompts/model behavior
+- memory extraction/design
+- personality behavior
+- persona design
+- traits design
+- profile system
+- moderation design
+- automod
+- search
+- image generation/editing
+- command organization
+- Replit deployment workflow
+
+These will be handled in later phases.
+
+---
+
+## 18. FINAL REPORT
+
+When complete, provide:
+
+### Database
+- SQLite library selected
+- database location
+- final schema
+- important relationships/indexes
+
+### Migration
+- records imported
+- records matched
+- missing/failed records
+- ambiguous records
+- backup location
+- whether migration is repeat-safe
+
+### Architecture
+- database abstraction added
+- confirmation that USER + GUILD conversation isolation remains intact
+
+### Testing
+- tests performed
+- results
+- any unresolved problems
+
+### Files
+List every created or modified file.
+
+### Limitations
+List anything intentionally left for later phases.
+
+### Next Task
+Recommend exactly ONE next foundation task.
+
+Do not implement that next task automatically.
+
+---
+
+# FINAL RULE
+
+This phase is ONLY about replacing JSON persistence with SQLite safely.
+
+Preserve all existing data.
+Preserve all existing behavior.
+Preserve USER + GUILD conversation isolation.
+Keep the original JSON database recoverable.
+Do not add unrelated features.
+Do not redesign the assistant.
+
+If anything is unclear or a destructive decision would be required, STOP and report the issue instead of guessing.

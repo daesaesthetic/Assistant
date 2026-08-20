@@ -23,10 +23,10 @@ export default {
     const userId = interaction.user.id;
     const guildId = interaction.guildId ?? "dm";
 
-    const botName   = db.getBotName(guildId);
-    const persona   = db.getPersona(userId, guildId);
-    const traits    = db.getTraits(userId, guildId);
-    const memories  = db.getMemories(userId, guildId);
+    const botName   = await db.getBotName(guildId);
+    const persona   = await db.getPersona(userId, guildId);
+    const traits    = await db.getTraits(userId, guildId);
+    const memories  = await db.getMemories(userId, guildId);
 
     const personaDisplay = persona
       ? persona.personaName === "custom"
