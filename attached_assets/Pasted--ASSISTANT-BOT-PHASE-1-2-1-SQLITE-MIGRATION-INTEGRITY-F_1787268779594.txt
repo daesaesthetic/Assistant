@@ -1,0 +1,193 @@
+# ASSISTANT BOT — PHASE 1.2.1
+## SQLITE MIGRATION INTEGRITY FIXES
+
+The Phase 1.2 read-only verification is complete.
+
+The SQLite migration itself is healthy and the actual JSON → SQLite data counts match.
+
+Do NOT rerun or redo the migration.
+
+Do NOT change the existing database schema unnecessarily.
+
+Do NOT add new user-facing features.
+
+Do NOT redesign conversations, memories, personas, traits, moderation, or commands.
+
+Only fix the specific issues identified below.
+
+---
+
+# 1. FIX THE MIGRATION REPORT
+
+The current migration metadata/report incorrectly records:
+
+matched: 0
+missing: 0
+
+even though the actual read-only comparison confirmed that all directly migratable records match.
+
+Update the migration reporting logic so it accurately records:
+
+- imported
+- matched
+- missing
+- duplicates
+- ambiguous
+- failed
+
+The report must be based on actual migration/validation results rather than hardcoded values.
+
+Do NOT alter the already-migrated data just to generate the report.
+
+The existing ambiguous guild-less legacy conversation must remain preserved as ambiguous.
+
+After the fix, verify that the stored migration report accurately reflects the current database state.
+
+---
+
+# 2. COMPLETE SCHEMA MIGRATION VERSIONING
+
+The current database records schema version 1, but the implementation returns once version 1 exists and does not provide a mechanism for future schema versions.
+
+Add a proper lightweight migration mechanism.
+
+Requirements:
+
+- Preserve the existing version 1 schema.
+- Do not recreate or destroy existing tables.
+- Do not modify existing data unnecessarily.
+- Store applied migration versions.
+- On startup, detect the current version.
+- Apply pending migrations sequentially.
+- A future migration should be able to go:
+  version 1 → version 2 → version 3
+- If no migrations are pending, startup should behave as it does now.
+
+Do NOT invent unnecessary future migrations.
+
+Only establish the infrastructure needed to safely add them later.
+
+---
+
+# 3. DOCUMENT SQLITE → JSON ROLLBACK
+
+The JSON backup exists, but there is currently no documented operational procedure for reverting persistence to JSON.
+
+Add clear internal documentation explaining:
+
+- where the SQLite database is located
+- where the original JSON backup is located
+- how to stop the bot before changing persistence
+- how to restore the JSON backup
+- how the application would be configured to use the JSON persistence layer again, if supported
+- what data could be lost if SQLite contains changes made after the backup
+- why a rollback should only be performed after stopping the bot and creating an additional backup
+
+Do NOT automatically perform a rollback.
+
+Do NOT delete SQLite data.
+
+The documentation should clearly state that the JSON backup is a snapshot from migration time and may not contain later changes.
+
+---
+
+# 4. UPDATE REPLIT PROJECT DOCUMENTATION
+
+The current `replit.md` still describes the bot's database as a JSON file store.
+
+Update the relevant documentation so it accurately describes:
+
+- SQLite as the current persistent database
+- database location
+- schema migration system
+- JSON migration/backup status
+- conversation scope as USER + GUILD
+- any important operational notes
+
+Do not rewrite unrelated documentation.
+
+---
+
+# 5. DO NOT TOUCH
+
+Do not modify:
+
+- migrated records
+- existing SQLite data
+- the ambiguous legacy conversation
+- bot commands
+- AI behavior
+- memory behavior
+- persona behavior
+- traits
+- moderation
+- configuration behavior
+- Discord permissions
+- Replit workflow
+- secrets
+
+unless absolutely required for the documentation or migration-versioning fixes above.
+
+---
+
+# 6. VERIFICATION
+
+After making the changes:
+
+1. Run TypeScript typechecking.
+2. Verify the bot still starts.
+3. Verify SQLite initialization still succeeds.
+4. Verify the schema remains intact.
+5. Verify the existing data counts remain unchanged.
+6. Verify the ambiguous legacy conversation remains preserved.
+7. Verify the migration report now contains accurate matched/missing values.
+8. Verify schema version 1 still initializes correctly.
+9. Verify the migration framework can detect that there are no pending migrations.
+10. Verify no existing user-facing functionality was intentionally changed.
+
+Do NOT perform a destructive migration or reset.
+
+---
+
+# 7. FINAL REPORT
+
+Return:
+
+### FIXED
+List each issue fixed.
+
+### DATABASE
+Confirm that existing SQLite data was preserved.
+
+### MIGRATION REPORT
+Show the corrected values for:
+
+- imported
+- matched
+- missing
+- duplicates
+- ambiguous
+- failed
+
+### SCHEMA VERSIONING
+Explain how future migrations will be handled.
+
+### ROLLBACK
+State where the rollback procedure is documented.
+
+### DOCUMENTATION
+List documentation files changed.
+
+### VERIFICATION
+List tests/checks performed.
+
+### REMAINING RISKS
+List anything still unresolved.
+
+If everything above is successful, state:
+
+`PHASE 1.2 COMPLETE — READY FOR NEXT PHASE`
+
+Do not begin the next development task automatically.
+
+STOP after the report.

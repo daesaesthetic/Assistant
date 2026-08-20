@@ -15,15 +15,17 @@ A fully modular Discord bot built with discord.js v14. Features slash commands, 
 - LLM: Groq API (llama-3.3-70b-versatile for text, llama-4-scout for vision)
 - Image generation: Pollinations.ai (free, no key)
 - Search: DuckDuckGo HTML (free, no key)
-- DB: JSON file store (`artifacts/discord-bot/data/db.json`)
+- DB: SQLite (`artifacts/discord-bot/data/azurion.sqlite`) with async access and versioned startup migrations
 
 ## Where things live
 
 - `artifacts/discord-bot/src/commands/` — one file per slash command
 - `artifacts/discord-bot/src/events/` — Discord event handlers
 - `artifacts/discord-bot/src/utils/` — Groq client, embeds, cooldowns, search
-- `artifacts/discord-bot/src/database/index.ts` — JSON-backed DB
-- `artifacts/discord-bot/data/db.json` — runtime data (personas, warnings, conversations)
+- `artifacts/discord-bot/src/database/index.ts` — SQLite-backed database abstraction
+- `artifacts/discord-bot/data/azurion.sqlite` — runtime data (personas, warnings, conversations, memories, traits, and guild configuration)
+- `artifacts/discord-bot/data/db.json` — original JSON source retained for recovery
+- `artifacts/discord-bot/data/db.json.pre-sqlite.bak` — migration-time JSON backup
 
 ## Commands
 
@@ -66,4 +68,23 @@ _Populate as you build — explicit user instructions worth remembering across s
 - After changing any command's name/options, re-run `deploy` to push updates to Discord
 - The `MessageContent` privileged intent must be enabled in the Developer Portal or automod won't work
 - The `GuildMembers` privileged intent is required for `/profile` and member timeouts
-- JSON DB reads/writes are synchronous — fine for a bot, avoid high-concurrency patterns
+- SQLite schema migrations are tracked in `schema_migrations` and applied sequentially at startup before Discord login.
+- Conversation history is scoped to USER + GUILD. `/talk reset` clears only the current user's conversation in the current guild.
+
+## SQLite rollback procedure
+
+The bot currently uses `artifacts/discord-bot/data/azurion.sqlite`. The original JSON snapshot is retained at
+`artifacts/discord-bot/data/db.json.pre-sqlite.bak` and is from migration time; it may not include changes made
+after that backup was created.
+
+Rollback is not automatic and should only be considered if SQLite persistence is determined to be faulty:
+
+1. Stop the `Azurion Discord Bot` workflow before touching either database.
+2. Create an additional backup of `azurion.sqlite` and the current `db.json`.
+3. Restore the JSON snapshot to `artifacts/discord-bot/data/db.json` only after confirming which later SQLite changes may be lost.
+4. The current application has no runtime switch back to the old JSON persistence layer. To use JSON again, restore
+   a prior project revision containing the JSON database implementation, then start the bot with the restored code.
+5. Keep the SQLite backup so the rollback can be reviewed or reversed.
+
+Restoring the migration-time JSON snapshot can lose any memories, conversations, personas, traits, warnings, or guild
+configuration changes written to SQLite after the snapshot was created.

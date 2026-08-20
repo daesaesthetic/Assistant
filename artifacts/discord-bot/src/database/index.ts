@@ -88,15 +88,11 @@ async function applySchema(db: SqliteDatabase): Promise<void> {
     );
   `);
 
-  const migration = await db.get<{ version: number }>(
-    "SELECT version FROM schema_migrations WHERE version = ?",
-    1
-  );
-  if (migration) return;
-
-  await db.exec("BEGIN IMMEDIATE");
-  try {
-    await db.exec(`
+  const migrations: Array<{ version: number; apply: (database: SqliteDatabase) => Promise<void> }> = [
+    {
+      version: 1,
+      apply: async (database) => {
+        await database.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY
       );
@@ -204,15 +200,28 @@ async function applySchema(db: SqliteDatabase): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_warnings_guild ON warnings(guild_id);
       CREATE INDEX IF NOT EXISTS idx_legacy_conversations_user ON legacy_conversations(user_id);
     `);
-    await db.run(
-      "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
-      1,
-      Date.now()
-    );
-    await db.exec("COMMIT");
-  } catch (error) {
-    await db.exec("ROLLBACK");
-    throw error;
+      },
+    },
+  ];
+
+  const current = (await db.get<{ version: number }>(
+    "SELECT MAX(version) AS version FROM schema_migrations"
+  ))?.version ?? 0;
+
+  for (const migration of migrations.filter(({ version }) => version > current).sort((a, b) => a.version - b.version)) {
+    await db.exec("BEGIN IMMEDIATE");
+    try {
+      await migration.apply(db);
+      await db.run(
+        "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+        migration.version,
+        Date.now()
+      );
+      await db.exec("COMMIT");
+    } catch (error) {
+      await db.exec("ROLLBACK");
+      throw error;
+    }
   }
 }
 
@@ -453,6 +462,80 @@ async function importJson(db: SqliteDatabase): Promise<void> {
   }
 }
 
+async function refreshMigrationReport(db: SqliteDatabase): Promise<void> {
+  const meta = await db.get<{ value: string }>(
+    "SELECT value FROM app_meta WHERE key = ?",
+    "json_data_migration"
+  );
+  if (!meta || !existsSync(JSON_PATH)) return;
+
+  const source = JSON.parse(readFileSync(JSON_PATH, "utf8")) as LegacyJson;
+  const count = async (table: string): Promise<number> => {
+    const row = await db.get<{ count: number }>(`SELECT COUNT(*) AS count FROM ${table}`);
+    return row?.count ?? 0;
+  };
+  const expected = {
+    personas: Object.keys(source.personas ?? {}).length,
+    warnings: Object.keys(source.warnings ?? {}).length,
+    guildConfig: Object.keys(source.guildConfig ?? {}).length,
+    memories: Object.values(source.memories ?? {}).reduce(
+      (total, values) => total + (Array.isArray(values) ? values.filter((value) => typeof value === "string").length : 0),
+      0
+    ),
+    traits: Object.values(source.traits ?? {}).reduce(
+      (total, values) => total + (Array.isArray(values) ? values.filter((value) => typeof value === "string").length : 0),
+      0
+    ),
+    conversationMessages: Object.entries(source.conversations ?? {}).reduce(
+      (total, [key, messages]) => total + (key.includes("::") ? validMessages(messages).length : 0),
+      0
+    ),
+  };
+  const actual = {
+    personas: await count("personas"),
+    warnings: await count("warnings"),
+    guildConfig: await count("guild_config"),
+    memories: await count("memories"),
+    traits: await count("traits"),
+    conversationMessages: await count("conversation_messages"),
+  };
+
+  const matched = Object.values(expected).reduce(
+    (total, value, index) => total + Math.min(value, Object.values(actual)[index]),
+    0
+  );
+  const missing = Object.values(expected).reduce(
+    (total, value, index) => total + Math.max(0, value - Object.values(actual)[index]),
+    0
+  );
+  const duplicates = Object.values(source.memories ?? {}).reduce(
+    (total, values) => total + (Array.isArray(values) ? values.length - new Set(values.filter((value) => typeof value === "string").map((value) => value.toLowerCase())).size : 0),
+    0
+  ) + Object.values(source.traits ?? {}).reduce(
+    (total, values) => total + (Array.isArray(values) ? values.length - new Set(values.filter((value) => typeof value === "string").map((value) => value.toLowerCase())).size : 0),
+    0
+  );
+  const ambiguous =
+    Object.keys(source.legacyConversations ?? {}).length +
+    Object.keys(source.conversations ?? {}).filter((key) => !key.includes("::")).length;
+  const previous = JSON.parse(meta.value) as Partial<typeof expected> & { imported?: number; failed?: number };
+  const report = {
+    imported: previous.imported ?? matched,
+    matched,
+    missing,
+    duplicates,
+    ambiguous,
+    failed: previous.failed ?? 0,
+    reconciledAt: Date.now(),
+  };
+
+  await db.run(
+    "UPDATE app_meta SET value = ? WHERE key = ?",
+    JSON.stringify(report),
+    "json_data_migration"
+  );
+}
+
 async function validateDatabase(db: SqliteDatabase): Promise<void> {
   const requiredTables = [
     "users",
@@ -484,6 +567,7 @@ export async function initializeDatabase(): Promise<SqliteDatabase> {
       const db = await open({ filename: SQLITE_PATH, driver: sqlite3.Database });
       await applySchema(db);
       await importJson(db);
+      await refreshMigrationReport(db);
       await validateDatabase(db);
       database = db;
       return db;
