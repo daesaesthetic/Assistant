@@ -1,0 +1,546 @@
+# ASSISTANT BOT — PHASE 1
+## FULL CODEBASE AUDIT & MODERNIZATION PLAN
+
+You are working on my existing Discord Assistant bot.
+
+This is an established project with existing functionality that I want to preserve and expand. Do NOT treat this as a new bot and do NOT rebuild or rewrite the project from scratch.
+
+Your task for this phase is to perform a comprehensive audit of the existing codebase and produce a detailed modernization plan.
+
+IMPORTANT:
+This phase is AUDIT ONLY.
+
+Do NOT implement any new features.
+Do NOT migrate the database.
+Do NOT rewrite existing commands.
+Do NOT reorganize the project unless absolutely necessary for inspection.
+Do NOT remove existing files, dependencies, commands, database data, or functionality.
+Do NOT make speculative changes.
+
+The goal is to understand the current project completely before we begin Phase 2.
+
+---
+
+# 1. INVENTORY THE ENTIRE PROJECT
+
+Inspect the complete repository, including:
+
+- package.json
+- lockfiles
+- TypeScript/JavaScript configuration
+- Replit configuration
+- environment/configuration files
+- command files
+- event handlers
+- utility modules
+- database/storage modules
+- AI/LLM integration
+- prompts/personality systems
+- moderation systems
+- memory systems
+- conversation systems
+- startup/entrypoint files
+- scripts
+- documentation
+- assets
+- tests, if any
+
+Identify the purpose of every significant file and directory.
+
+Create a concise project structure overview such as:
+
+src/
+├── commands/
+├── events/
+├── services/
+├── database/
+├── utils/
+└── ...
+
+Use the ACTUAL structure of this project rather than assuming a structure.
+
+---
+
+# 2. DOCUMENT ALL EXISTING FUNCTIONALITY
+
+Create a complete inventory of the bot's current functionality.
+
+For every existing slash command, document:
+
+- command name
+- subcommands, if any
+- purpose
+- required arguments
+- optional arguments
+- permissions
+- whether it is user-specific or guild-specific
+- database interaction
+- AI interaction
+- external API interaction
+- response type
+- important dependencies
+- potential issues
+
+Do not recommend removing commands at this stage.
+
+Pay particular attention to the existing:
+
+- AI conversation system
+- memory system
+- personality/persona system
+- traits system
+- profile system
+- moderation system
+- server configuration
+- channel configuration
+- image editing/generation
+- suggestion/search functionality
+- developer/admin functionality
+
+---
+
+# 3. ANALYZE THE CURRENT ARCHITECTURE
+
+Determine how the bot currently handles:
+
+## Discord
+
+- Discord client initialization
+- intents
+- partials
+- command registration
+- interaction handling
+- event handling
+- permission checking
+- error handling
+- cooldowns/rate limits
+
+## Commands
+
+Determine whether commands are:
+
+- modular
+- centralized
+- duplicated
+- tightly coupled
+- easy to extend
+- easy to test
+
+Identify any patterns that should be preserved.
+
+## AI
+
+Analyze:
+
+- model/provider integration
+- system prompts
+- persona injection
+- trait injection
+- memory injection
+- conversation history
+- token/context management
+- error handling
+- rate limiting
+- fallback behavior
+
+Explain the actual flow from:
+
+User message
+→ command/event
+→ context gathering
+→ prompt construction
+→ AI request
+→ response
+→ memory processing
+→ database/storage
+
+## Storage
+
+Determine exactly how data is stored.
+
+Document:
+
+- storage technology
+- schemas/data structures
+- read/write behavior
+- persistence
+- user data
+- guild data
+- conversation data
+- memory data
+- moderation data
+- configuration data
+
+Identify where global user data and guild-specific data are currently mixed or separated.
+
+---
+
+# 4. IDENTIFY ARCHITECTURAL PROBLEMS
+
+Find issues that could become problematic as the bot grows.
+
+Prioritize:
+
+### Critical
+Things that could cause data loss, security problems, crashes, or major functionality failures.
+
+### High
+Things that will make future development difficult or cause reliability problems.
+
+### Medium
+Things that should eventually be cleaned up but don't immediately block development.
+
+### Low
+Minor technical debt, style issues, or optional improvements.
+
+For every issue explain:
+
+1. What the problem is.
+2. Where it exists.
+3. Why it matters.
+4. What should eventually be done.
+5. Whether it should be fixed before adding new functionality.
+
+Do NOT fix these issues yet.
+
+---
+
+# 5. ANALYZE THE DATA MODEL
+
+This is especially important.
+
+Determine whether the current architecture properly separates:
+
+GLOBAL USER DATA
+
+Examples:
+- username/display information
+- personal preferences
+- memories
+- personality preferences
+- assistant relationship data
+- usage statistics
+
+GUILD DATA
+
+Examples:
+- server configuration
+- assistant channel
+- moderation settings
+- automod settings
+- server preferences
+
+CONVERSATION DATA
+
+Examples:
+- user
+- guild
+- channel
+- conversation/session
+- messages
+- timestamps
+
+MODERATION DATA
+
+Examples:
+- warnings
+- moderation actions
+- logs
+
+Identify any places where these concepts are currently mixed together.
+
+Do not redesign the database yet.
+
+Instead, provide a proposed future data architecture.
+
+---
+
+# 6. ANALYZE THE CURRENT MEMORY SYSTEM
+
+The memory system is one of the core features of this bot.
+
+Document exactly:
+
+- how memories are created
+- how memories are extracted
+- how memories are stored
+- how memories are retrieved
+- when memories are injected into AI prompts
+- whether memories are global or guild-specific
+- whether users can manually add memories
+- whether users can remove individual memories
+- whether memories have metadata
+- whether duplicate memories are possible
+- whether incorrect memories can be corrected
+- whether memory extraction can fail
+- how memory privacy currently works
+
+Then propose a future memory architecture WITHOUT implementing it.
+
+---
+
+# 7. ANALYZE THE CONVERSATION SYSTEM
+
+Document:
+
+- how conversations are stored
+- how much history is retained
+- whether conversations are user-specific
+- whether they are guild-specific
+- whether they are channel-specific
+- how conversations are reset
+- whether conversations can be summarized
+- how context limits are handled
+- what happens when the AI request fails
+
+Identify limitations that will matter if the bot becomes a long-term personal assistant.
+
+---
+
+# 8. ANALYZE PERSONALITY
+
+Document the current systems for:
+
+- persona
+- traits
+- personality
+- assistant name
+- system prompts
+
+Determine exactly how each affects AI responses.
+
+Identify whether these systems overlap or duplicate one another.
+
+Then propose how they could eventually be unified into a cleaner behavioral architecture.
+
+Do NOT implement the changes.
+
+---
+
+# 9. ANALYZE USER EXPERIENCE
+
+Review the bot as an actual Discord user would experience it.
+
+Look for:
+
+- confusing commands
+- inconsistent naming
+- poor command organization
+- unclear descriptions
+- unnecessary command complexity
+- missing help/discovery
+- poor error messages
+- inconsistent embeds
+- missing loading/deferred responses
+- missing buttons/select menus/modals where useful
+- lack of confirmations for destructive actions
+- permission errors
+- commands that feel disconnected from one another
+
+Identify places where the bot feels like a collection of commands rather than one cohesive assistant.
+
+This is an important part of the audit.
+
+---
+
+# 10. IDENTIFY WHAT IS MISSING
+
+Based on the existing codebase, identify functionality that would make this bot feel like a complete Discord assistant rather than simply an AI chatbot with utility commands.
+
+Organize recommendations into:
+
+### Foundation
+Architecture, database, reliability, configuration.
+
+### Assistant
+Conversation, memory, context, personalization.
+
+### Profile
+User profile, statistics, history, preferences.
+
+### Server Assistant
+Server configuration, automation, logging, server tools.
+
+### Moderation
+Moderation commands, automod, logging, configuration.
+
+### Personality
+Persona, traits, behavior, customization.
+
+### Information
+Help, about, status, diagnostics, invite, etc.
+
+### Engagement
+Milestones, subtle progression, Easter eggs, hidden functionality, etc.
+
+Do not blindly add features.
+
+For each recommendation explain why it fits this bot specifically.
+
+---
+
+# 11. REPLIT COMPATIBILITY
+
+Analyze how suitable the current project is for continued development and deployment on Replit.
+
+Check:
+
+- Node.js version
+- package manager
+- build process
+- startup process
+- environment variables
+- secrets
+- persistent storage
+- database paths
+- development vs production execution
+- TypeScript compilation
+- dependency size
+- unnecessary dependencies
+- Replit-specific configuration
+
+Identify anything that could cause problems later.
+
+Do not modify Replit configuration during this phase.
+
+---
+
+# 12. SECURITY AUDIT
+
+Review the project for:
+
+- exposed secrets
+- unsafe environment variable handling
+- permission bypasses
+- missing authorization checks
+- owner/developer-only functionality
+- unsafe user input handling
+- prompt injection risks
+- database injection risks
+- destructive command protection
+- moderation permission issues
+- API abuse
+- rate limiting
+- privacy concerns involving memories and conversations
+
+Do NOT expose actual secret values in your report.
+
+If secrets are found in source files, identify the file and explain the risk without printing the secret.
+
+Do not fix anything yet.
+
+---
+
+# 13. PERFORMANCE AUDIT
+
+Identify:
+
+- unnecessary API requests
+- repeated database reads/writes
+- synchronous operations
+- inefficient loops
+- excessive Discord API usage
+- unnecessary AI requests
+- large caches
+- memory growth risks
+- command operations that could block the event loop
+
+Classify each issue by severity.
+
+---
+
+# 14. CREATE A RECOMMENDED DEVELOPMENT ROADMAP
+
+After completing the audit, create a prioritized roadmap.
+
+Use phases similar to:
+
+PHASE 1 — Foundation
+PHASE 2 — Settings & UX
+PHASE 3 — Assistant System
+PHASE 4 — Server Assistant
+PHASE 5 — Personality
+PHASE 6 — Engagement & Polish
+
+For each phase list:
+
+- features
+- architectural prerequisites
+- dependencies on previous phases
+- estimated complexity: Low / Medium / High
+- whether existing functionality could be affected
+
+Do not implement the roadmap.
+
+---
+
+# 15. PRESERVATION REQUIREMENTS
+
+Throughout this audit, treat all existing functionality as intentional unless there is clear evidence that something is broken.
+
+The eventual modernization must preserve:
+
+- existing commands
+- existing memories
+- existing user data
+- existing server configuration
+- existing moderation data
+- existing AI functionality
+- existing personality functionality
+- existing integrations
+
+If something should eventually be replaced, recommend a migration path rather than simply deleting it.
+
+---
+
+# 16. FINAL REPORT
+
+At the end, provide a concise but comprehensive report containing:
+
+## A. Current Architecture
+
+What the bot is currently made of.
+
+## B. Existing Features
+
+Complete command/feature inventory.
+
+## C. Strengths
+
+What should be preserved.
+
+## D. Critical Problems
+
+Anything that should be addressed before major expansion.
+
+## E. Technical Debt
+
+Things that can be improved later.
+
+## F. Missing Features
+
+What would make the bot feel complete.
+
+## G. Proposed Future Architecture
+
+How the major systems should eventually fit together.
+
+## H. Recommended Roadmap
+
+Ordered implementation phases.
+
+## I. First Implementation Task
+
+Recommend exactly ONE task that should be implemented next.
+
+---
+
+# MOST IMPORTANT RULE
+
+DO NOT MODIFY THE CODEBASE DURING THIS PHASE.
+
+This is an audit and planning phase only.
+
+When finished, stop and wait for further instructions.
+
+Do not automatically begin implementing the recommended first task.
