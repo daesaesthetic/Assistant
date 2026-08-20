@@ -1,0 +1,219 @@
+# ASSISTANT BOT — PHASE 1.3
+## AI CONTEXT & CONVERSATION RELIABILITY AUDIT
+
+Phase 1.2 is complete.
+
+The bot now uses SQLite, the database has been verified, and conversations are isolated by USER + GUILD.
+
+Before changing the AI conversation system, perform a READ-ONLY audit of how AI context is currently constructed and used.
+
+IMPORTANT:
+
+DO NOT modify any files.
+DO NOT change the database.
+DO NOT change commands.
+DO NOT change prompts.
+DO NOT change model settings.
+DO NOT add features.
+DO NOT install dependencies.
+
+This phase is AUDIT ONLY.
+
+The goal is to understand exactly how `/talk` and automatic mention responses construct AI context and identify what must eventually be improved.
+
+---
+
+# 1. TRACE THE COMPLETE AI REQUEST
+
+Trace the actual flow from:
+
+Discord message/command
+→ conversation lookup
+→ user/guild context
+→ memories
+→ persona
+→ traits
+→ system prompt
+→ conversation history
+→ current user message
+→ AI API request
+→ response
+→ conversation persistence
+
+Identify the exact files/functions responsible for each stage.
+
+---
+
+# 2. CURRENT CONTEXT STRUCTURE
+
+Determine exactly what is currently sent to the AI.
+
+Document:
+
+- system prompt
+- persona
+- traits
+- memories
+- conversation history
+- current user message
+- any Discord/server context
+- model
+- temperature
+- token limits
+- other generation parameters
+
+Show the effective conceptual prompt structure.
+
+Do not expose API keys or secrets.
+
+---
+
+# 3. CONVERSATION HISTORY
+
+Determine exactly how conversation history is handled.
+
+Verify:
+
+- maximum number of messages
+- whether the limit is message-count based or token-based
+- ordering
+- trimming behavior
+- whether user and assistant messages are both stored
+- whether oversized individual messages are handled
+- whether empty/malformed messages are handled
+- whether history is retrieved before or after adding the current message
+- whether the current message can be duplicated
+- how failed AI requests affect stored history
+
+---
+
+# 4. CONTEXT SIZE
+
+Determine whether the current implementation has an explicit context/token budget.
+
+If it does:
+
+- identify the budget
+- identify how tokens are estimated
+- identify what happens when the budget is exceeded
+
+If it does NOT:
+
+explicitly state that.
+
+Estimate where oversized prompts could occur due to:
+
+- long memories
+- long persona text
+- many traits
+- long messages
+- long conversation history
+
+Do not change anything.
+
+---
+
+# 5. MEMORIES
+
+Determine exactly how memories enter AI context.
+
+Document:
+
+- retrieval method
+- number of memories retrieved
+- ordering
+- filtering
+- whether all memories are included
+- whether memory length is limited
+- whether memories have relevance scoring
+- whether duplicate/irrelevant memories can consume context
+
+Do not redesign the memory system.
+
+We only want to understand its current context impact.
+
+---
+
+# 6. PERSONA & TRAITS
+
+Determine exactly how persona and traits are injected into the AI request.
+
+Identify:
+
+- where they are retrieved
+- where they are formatted
+- whether they have size limits
+- whether they can become excessively large
+- whether persona/traits are duplicated in prompts
+
+Do not modify their behavior.
+
+---
+
+# 7. AUTOMATIC MENTION RESPONSES
+
+Audit the automatic mention-response path separately from `/talk`.
+
+Determine whether it uses:
+
+- the same conversation service
+- the same context builder
+- the same memories
+- the same persona
+- the same traits
+- the same AI request logic
+
+Identify duplicated or inconsistent context-building logic.
+
+---
+
+# 8. AI FAILURE HANDLING
+
+Determine what happens when:
+
+- the AI API fails
+- the request times out
+- the request is rejected because of context size
+- the response is empty
+- the response is malformed
+- rate limits occur
+
+Especially determine whether failed requests are incorrectly saved as conversation messages.
+
+Do not modify anything.
+
+---
+
+# 9. PERFORMANCE
+
+Identify:
+
+- unnecessary database queries
+- repeated memory retrieval
+- repeated persona/trait retrieval
+- duplicate prompt construction
+- unnecessary API requests
+- operations that could block the event loop
+
+Do not optimize yet.
+
+---
+
+# 10. FUTURE ARCHITECTURE
+
+Based ONLY on the actual current implementation, propose a future context architecture capable of supporting:
+
+```text
+System instructions
+        +
+Persona
+        +
+Traits
+        +
+Relevant memories
+        +
+Conversation summary (future)
+        +
+Recent conversation
+        +
+Current message
