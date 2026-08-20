@@ -1,0 +1,169 @@
+# ASSISTANT BOT — PHASE 1.2 VERIFICATION
+## SQLITE MIGRATION AUDIT
+
+The SQLite migration phase has been reported as complete.
+
+Before we proceed to the next development phase, perform a READ-ONLY audit of the current implementation.
+
+IMPORTANT:
+
+DO NOT modify any files.
+DO NOT migrate data again.
+DO NOT change the database.
+DO NOT change commands or bot behavior.
+DO NOT install dependencies.
+DO NOT "fix" anything you find.
+
+We only want to verify whether the current implementation actually satisfies the Phase 1.2 SQLite migration requirements.
+
+---
+
+## 1. DATABASE IMPLEMENTATION
+
+Inspect the actual code and report:
+
+- SQLite library being used
+- database file/location
+- database initialization process
+- schema/migrations
+- database abstraction/service layer
+- whether database access is asynchronous/non-blocking
+- important indexes
+- foreign keys/constraints
+- transaction usage
+
+Show the actual SQLite tables and briefly explain their purpose.
+
+---
+
+## 2. DATA MIGRATION
+
+Determine whether the existing JSON data was actually migrated.
+
+Report counts where possible for:
+
+- users
+- guilds
+- memories
+- personas
+- traits
+- conversations
+- conversation messages
+- warnings
+- guild configuration
+- any other persistent data found
+
+For each category report:
+
+- JSON count
+- SQLite count
+- matched
+- missing
+- duplicate
+- ambiguous
+
+Do NOT perform another migration.
+
+---
+
+## 3. MIGRATION SAFETY
+
+Verify whether:
+
+- the original JSON database still exists
+- a migration backup exists
+- the migration prevents duplicate records
+- unique Discord IDs are enforced
+- migration/schema versions are tracked
+- migration failure leaves the original JSON recoverable
+- a rollback path is documented
+
+If something cannot be verified from the code/files, explicitly say:
+
+`NOT VERIFIED`
+
+Do not guess.
+
+---
+
+## 4. CONVERSATION ISOLATION
+
+Inspect the actual implementation and confirm whether conversations remain scoped by:
+
+USER + GUILD
+
+Verify:
+
+- `/talk`
+- automatic mention responses
+- conversation retrieval
+- conversation storage
+- `/talk reset`
+
+Specifically confirm:
+
+User A + Guild A ≠ User A + Guild B
+
+and:
+
+Resetting Guild A does not delete Guild B's conversation.
+
+---
+
+## 5. EXISTING FUNCTIONALITY
+
+Verify from the code that the SQLite layer does not intentionally remove or bypass existing functionality involving:
+
+- memories
+- persona
+- traits
+- warnings
+- guild configuration
+- `/talk`
+
+Do not modify anything.
+
+---
+
+## 6. FINAL VERDICT
+
+Return exactly these sections:
+
+### PASS
+Requirements that are clearly satisfied.
+
+### FAIL
+Requirements that are clearly not satisfied.
+
+### NOT VERIFIED
+Requirements that cannot be confirmed from the current implementation.
+
+### RISKS
+Any migration/data-integrity concerns discovered.
+
+### RECOMMENDATION
+Choose exactly one:
+
+`READY FOR NEXT PHASE`
+
+or
+
+`FIX BEFORE NEXT PHASE`
+
+If recommending fixes, list only the specific missing requirements. Do not implement them.
+
+---
+
+# FINAL RULE
+
+This is an AUDIT ONLY.
+
+Do not make changes.
+
+Do not guess.
+
+Do not rerun the migration.
+
+Do not proceed to the next development task.
+
+Stop after providing the verification report.
