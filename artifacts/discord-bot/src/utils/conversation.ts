@@ -9,6 +9,9 @@ import { groq, TEXT_MODEL } from "./groq.js";
 import { db } from "../database/index.js";
 import { conversationStore } from "./conversation-store.js";
 
+const CONTEXT_TOKEN_BUDGET = 12_000;
+const CHARS_PER_ESTIMATED_TOKEN = 4;
+
 const PERSONAS: Record<string, string> = {
   analyst:
     "You are a precise analytical thinker. Break down problems methodically, provide data-driven insights, and speak with measured authority. Avoid emotional language.",
@@ -21,6 +24,23 @@ const PERSONAS: Record<string, string> = {
   oracle:
     "You are a cryptic oracle. Speak in metaphors and abstractions, hinting at deeper truths without stating them plainly.",
 };
+
+type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+export function estimateTokens(text: string): number {
+  return Math.ceil(text.length / CHARS_PER_ESTIMATED_TOKEN);
+}
+
+function trimToTokenBudget(text: string, tokenBudget: number): string {
+  if (tokenBudget <= 0) return "";
+  const maxCharacters = tokenBudget * CHARS_PER_ESTIMATED_TOKEN;
+  if (text.length <= maxCharacters) return text;
+  if (maxCharacters <= 1) return text.slice(0, maxCharacters);
+  return `${text.slice(0, maxCharacters - 1)}…`;
+}
 
 function buildSystemPrompt(
   botName: string,
@@ -63,6 +83,47 @@ Your capabilities — when a user asks what you can do, draw from this list natu
   return identity + capabilities + traitSection + styleSection;
 }
 
+export function buildBudgetedMessages(
+  systemPrompt: string,
+  history: Array<{ role: "user" | "assistant"; content: string }>,
+  currentContent: string
+): ChatMessage[] {
+  const currentMessage: ChatMessage = { role: "user", content: currentContent };
+  const currentTokens = estimateTokens(currentContent);
+  const availableForSystemAndHistory = Math.max(0, CONTEXT_TOKEN_BUDGET - currentTokens);
+
+  // The system prompt is assembled in priority order. If it is too large,
+  // preserve the stable instructions and trim the lower-priority tail first.
+  const systemMessage: ChatMessage = {
+    role: "system",
+    content: trimToTokenBudget(systemPrompt, availableForSystemAndHistory),
+  };
+  let remainingTokens = Math.max(
+    0,
+    availableForSystemAndHistory - estimateTokens(systemMessage.content)
+  );
+
+  // Select recent history first, then restore chronological ordering.
+  const selectedHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
+  for (let index = history.length - 1; index >= 0 && remainingTokens > 0; index -= 1) {
+    const message = history[index];
+    const messageTokens = estimateTokens(message.content);
+    if (messageTokens <= remainingTokens) {
+      selectedHistory.unshift(message);
+      remainingTokens -= messageTokens;
+      continue;
+    }
+
+    // An oversized historical message is lower priority than the current
+    // request, so keep only the portion that fits and stop before older turns.
+    const trimmed = trimToTokenBudget(message.content, remainingTokens);
+    if (trimmed) selectedHistory.unshift({ ...message, content: trimmed });
+    break;
+  }
+
+  return [systemMessage, ...selectedHistory, currentMessage];
+}
+
 export async function generateReply(params: {
   userId: string;
   guildId: string;
@@ -94,11 +155,7 @@ export async function generateReply(params: {
   }
 
   const history = await conversationStore.getHistory(context);
-  const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
-    { role: "system", content: systemPrompt },
-    ...history,
-    { role: "user", content },
-  ];
+  const messages = buildBudgetedMessages(systemPrompt, history, content);
 
   const completion = await groq.chat.completions.create({
     model: TEXT_MODEL,
