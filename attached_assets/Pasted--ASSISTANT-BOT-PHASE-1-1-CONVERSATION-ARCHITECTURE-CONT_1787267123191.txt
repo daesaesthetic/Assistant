@@ -1,0 +1,468 @@
+# ASSISTANT BOT — PHASE 1.1
+## CONVERSATION ARCHITECTURE & CONTEXT ISOLATION
+
+We are continuing the modernization of the existing Discord Assistant bot.
+
+The previous phase was an audit only. The audit identified a HIGH-priority architectural/privacy issue:
+
+- Memories, personas, and traits are scoped by user + guild.
+- Conversation history is currently scoped only by user.
+- This means conversation history can potentially be reused across different Discord servers.
+- `/talk reset` can therefore clear conversation history globally instead of only the relevant conversation context.
+
+Your task in this phase is to fix ONLY the conversation-scoping architecture.
+
+IMPORTANT:
+
+Do NOT perform a database migration to SQLite yet.
+Do NOT redesign the memory system yet.
+Do NOT add new user-profile functionality.
+Do NOT add `/settings`.
+Do NOT add new commands unless absolutely necessary for the implementation.
+Do NOT rewrite the entire conversation system.
+Do NOT modify unrelated moderation, personality, image, search, or server functionality.
+
+Preserve all existing functionality wherever possible.
+
+The goal is to make conversation context properly isolated while establishing a foundation for future conversation sessions.
+
+---
+
+# 1. INSPECT THE EXISTING CONVERSATION SYSTEM
+
+Before modifying anything, inspect the current implementation of:
+
+- `/talk`
+- automatic responses when the bot is mentioned
+- dedicated conversation channels
+- conversation history storage
+- conversation reset behavior
+- AI prompt construction
+- conversation retrieval
+- conversation persistence
+- any utilities/services responsible for conversation state
+
+Determine exactly how conversation records are currently keyed and accessed.
+
+Do not assume the architecture from the previous audit is perfectly accurate; verify it against the actual source code.
+
+---
+
+# 2. IMPLEMENT GUILD-LEVEL CONVERSATION ISOLATION
+
+Conversation history must no longer be globally shared between servers.
+
+At minimum, conversation context must be scoped by:
+
+USER + GUILD
+
+For example:
+
+userId + guildId
+
+A conversation from Server A must never be supplied as conversation context when the same user interacts with the bot in Server B.
+
+This applies to:
+
+- `/talk`
+- automatic mention responses
+- conversation history retrieval
+- conversation reset
+- AI prompt construction
+- conversation persistence
+
+---
+
+# 3. INTRODUCE A CONVERSATION CONTEXT / SESSION CONCEPT
+
+Do not hard-code the architecture so that future improvements become difficult.
+
+Introduce a clean internal concept of a conversation context/session.
+
+The eventual architecture should be capable of supporting:
+
+User
+ └── Guild
+      └── Conversation Session
+           ├── Channel
+           ├── Created At
+           ├── Last Active
+           └── Messages
+
+For this phase, the minimum required isolation is:
+
+USER + GUILD
+
+However, design the code so that channel/session-level separation can be added later without requiring another complete rewrite.
+
+Do NOT implement advanced conversation sessions yet unless they are necessary for the architecture.
+
+---
+
+# 4. PRESERVE EXISTING CONVERSATIONS
+
+This is extremely important.
+
+Do not simply delete the existing conversation data.
+
+The current JSON database may contain existing conversation histories.
+
+Create a safe migration/normalization step for existing conversation records.
+
+Existing data should be handled according to the following rules:
+
+- Existing conversations that can be associated with a guild should be migrated into the appropriate user + guild context.
+- If existing records do not contain enough information to determine the guild, DO NOT invent one.
+- Do not silently assign ambiguous historical conversations to an arbitrary guild.
+- Preserve ambiguous data in a safe way if possible, or clearly report what cannot be automatically migrated.
+
+Because this project is currently using JSON storage, the migration must work with the existing JSON structure.
+
+Do NOT migrate to SQLite in this phase.
+
+---
+
+# 5. UPDATE /TALK
+
+Ensure `/talk` retrieves conversation history using the new conversation scope.
+
+For example:
+
+User A in Guild 123:
+
+conversation history A
+
+User A in Guild 456:
+
+conversation history B
+
+The two contexts must never be mixed.
+
+Existing features of `/talk` must continue working, including:
+
+- AI responses
+- persona
+- traits
+- memories
+- conversation history
+- deferred responses
+- error handling
+
+Do not remove any of these.
+
+---
+
+# 6. UPDATE AUTOMATIC MENTION RESPONSES
+
+The bot currently supports automatic responses when mentioned.
+
+These responses must use the same conversation isolation rules as `/talk`.
+
+A mention in Guild A must never retrieve conversation history from Guild B.
+
+Make sure the automatic-response path and `/talk` share the same underlying conversation retrieval/storage logic where practical.
+
+Avoid duplicating conversation-scoping logic in multiple places.
+
+---
+
+# 7. UPDATE /TALK RESET
+
+`/talk reset` must no longer clear the user's conversation history globally.
+
+It should clear the conversation context associated with the current guild.
+
+For example:
+
+User A resets `/talk` in Guild 123.
+
+Result:
+
+Guild 123 conversation context → cleared
+
+Guild 456 conversation context → untouched
+
+Other user data must remain untouched:
+
+- memories
+- persona
+- traits
+- profile
+- warnings
+- server configuration
+- other conversations
+
+Do not turn `/talk reset` into a destructive global reset.
+
+---
+
+# 8. CENTRALIZE CONVERSATION ACCESS
+
+If the current code directly accesses the JSON database from multiple commands/events, introduce a small conversation data-access/service layer.
+
+For example, conceptually:
+
+conversationService.get(...)
+conversationService.add(...)
+conversationService.reset(...)
+conversationService.getHistory(...)
+
+Use names consistent with the existing project.
+
+The goal is to prevent `/talk`, mention handling, and future conversation features from implementing their own slightly different conversation logic.
+
+Do not over-engineer this.
+
+Keep the service small and appropriate for the current project.
+
+---
+
+# 9. CONVERSATION DATA STRUCTURE
+
+Use a structure that clearly represents the new scope.
+
+The exact implementation should follow the project's existing coding conventions.
+
+Conceptually, conversation records should contain enough information to identify:
+
+- user ID
+- guild ID
+- conversation/session identifier if appropriate
+- messages
+- timestamps if the existing system supports them
+
+Do not add unnecessary fields simply for the sake of adding them.
+
+The architecture should leave room for future:
+
+- channel-specific conversations
+- conversation sessions
+- summaries
+- expiration
+- metadata
+
+but those features are NOT part of this task.
+
+---
+
+# 10. DATA SAFETY
+
+The JSON database currently uses atomic writes.
+
+Preserve that behavior.
+
+Before changing conversation persistence:
+
+- create a backup or safe migration path
+- do not overwrite the only copy of existing data
+- ensure malformed conversation data does not crash the entire bot
+- handle missing guild IDs safely
+- handle empty histories safely
+- avoid duplicate messages during migration
+
+Do not modify unrelated database collections.
+
+---
+
+# 11. ERROR HANDLING
+
+Add appropriate error handling around the new conversation access layer.
+
+A malformed conversation record should not crash the bot.
+
+If conversation data cannot be loaded:
+
+- log the technical error
+- provide the user with a normal, friendly Discord response
+- do not expose internal file paths, stack traces, or implementation details
+
+Do not silently swallow errors that would make debugging impossible.
+
+Use the project's existing logging/error-handling conventions where possible.
+
+---
+
+# 12. TESTING
+
+After implementation, verify at minimum:
+
+### Test 1 — Same user, different guilds
+
+User A talks to the bot in Guild A.
+
+Then User A talks to the bot in Guild B.
+
+Guild B must not receive Guild A's conversation context.
+
+### Test 2 — Reset isolation
+
+User A talks in Guild A.
+
+User A talks in Guild B.
+
+User A runs `/talk reset` in Guild A.
+
+Guild A history is cleared.
+
+Guild B history remains.
+
+### Test 3 — Multiple users
+
+User A and User B interact in the same guild.
+
+Their conversation histories remain separate.
+
+### Test 4 — Mentions
+
+User A mentions the bot in Guild A.
+
+The automatic response uses Guild A's conversation context only.
+
+### Test 5 — Persona/memory preservation
+
+Changing conversation scope must not break:
+
+- persona
+- traits
+- memories
+
+### Test 6 — Existing data
+
+Start with a copy of the current JSON database and verify that the migration/normalization does not destroy unrelated data.
+
+### Test 7 — Reset safety
+
+`/talk reset` must not remove:
+
+- memories
+- traits
+- persona
+- warnings
+- server settings
+
+---
+
+# 13. DO NOT CHANGE THESE SYSTEMS
+
+Unless a change is absolutely required to complete this task, leave these untouched:
+
+- memory extraction
+- `/memories`
+- persona behavior
+- `/persona`
+- `/personality`
+- `/traits`
+- `/name`
+- `/suggest`
+- `/search`
+- `/edit`
+- `/config`
+- `/channel`
+- moderation
+- automod
+- `/profile`
+- `/commands`
+- `/credits`
+- external API integrations
+- Replit deployment configuration
+
+We will address these in later phases.
+
+---
+
+# 14. CODE QUALITY REQUIREMENTS
+
+Keep the implementation consistent with the existing codebase.
+
+Prefer:
+
+- small focused functions
+- existing utilities
+- existing error handling
+- existing TypeScript conventions
+- minimal duplication
+- clear naming
+- type-safe data access
+
+Do not introduce a large framework or unnecessary dependency.
+
+Do not rewrite working code simply to make it stylistically different.
+
+---
+
+# 15. FINAL VERIFICATION
+
+Before considering the task complete:
+
+1. Run the project's existing type checking.
+2. Run any existing tests.
+3. Verify the bot starts successfully.
+4. Verify slash commands still register.
+5. Verify `/talk` works.
+6. Verify automatic mention responses work.
+7. Verify `/talk reset` works.
+8. Verify existing data remains intact.
+9. Verify conversation isolation between guilds.
+10. Verify no unrelated functionality was changed.
+
+If a test cannot be performed automatically, explain how it should be manually tested.
+
+---
+
+# 16. FINAL REPORT
+
+When finished, provide a concise implementation report containing:
+
+## Changed
+
+List every file that was modified or created.
+
+## Conversation Architecture
+
+Explain the new conversation scope.
+
+## Migration
+
+Explain how existing JSON conversation data was handled.
+
+## Reset Behavior
+
+Explain exactly what `/talk reset` now clears.
+
+## Safety
+
+Explain how existing data was protected.
+
+## Testing
+
+List the tests performed and their results.
+
+## Remaining Limitations
+
+List anything intentionally NOT implemented in this phase.
+
+## Next Recommended Task
+
+Do not automatically implement it.
+
+Recommend the next logical Phase 1 task based on the current codebase.
+
+---
+
+# FINAL RULE
+
+This task is ONLY about conversation architecture and context isolation.
+
+Do not expand the scope.
+
+Do not add unrelated features.
+
+Do not migrate to SQLite yet.
+
+Do not redesign memory yet.
+
+Do not create the settings system yet.
+
+Make the smallest safe architectural improvement necessary to eliminate cross-guild conversation leakage and establish a clean foundation for future conversation sessions.
+
+After completing the implementation and report, STOP and wait for further instructions.

@@ -7,6 +7,7 @@
  */
 import { groq, TEXT_MODEL } from "./groq.js";
 import { db } from "../database/index.js";
+import { conversationStore } from "./conversation-store.js";
 
 const PERSONAS: Record<string, string> = {
   analyst:
@@ -70,7 +71,9 @@ export async function generateReply(params: {
 }): Promise<{ text: string; botName: string; personaLabel?: string }> {
   const { userId, guildId, content, resetHistory = false } = params;
 
-  if (resetHistory) db.clearConversation(userId);
+  const context = { userId, guildId };
+
+  if (resetHistory) conversationStore.reset(context);
 
   const botName  = db.getBotName(guildId);
   const persona  = db.getPersona(userId, guildId);
@@ -90,7 +93,7 @@ export async function generateReply(params: {
       memories.map((m) => `- ${m}`).join("\n");
   }
 
-  const history = db.getConversation(userId);
+  const history = conversationStore.getHistory(context);
   const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
     { role: "system", content: systemPrompt },
     ...history,
@@ -111,7 +114,7 @@ export async function generateReply(params: {
     { role: "user" as const, content },
     { role: "assistant" as const, content: response },
   ].slice(-20);
-  db.setConversation(userId, updatedHistory);
+  conversationStore.setHistory(context, updatedHistory);
 
   // Fire memory extraction in the background — never blocks the reply
   void extractMemories(userId, guildId, content, response);

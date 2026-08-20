@@ -3,7 +3,14 @@
  * write → temp file → rename(2) — atomic on Linux, no corruption on crash.
  * In-memory cache avoids repeated disk reads on hot paths.
  */
-import { readFileSync, writeFileSync, renameSync, mkdirSync, existsSync } from "fs";
+import {
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  mkdirSync,
+  existsSync,
+  copyFileSync,
+} from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -41,6 +48,13 @@ interface DBData {
   guildConfig: Record<string, GuildConfig>;
   memories: Record<string, string[]>;
   traits: Record<string, string[]>;
+  /**
+   * Conversations are keyed as `userId::guildId`.
+   * Legacy user-only histories are retained here because their guild cannot
+   * be determined safely from the old data.
+   */
+  legacyConversations: Record<string, ConversationMessage[]>;
+  conversationSchemaVersion: 2;
 }
 
 const EMPTY: DBData = {
@@ -50,17 +64,91 @@ const EMPTY: DBData = {
   guildConfig: {},
   memories: {},
   traits: {},
+  legacyConversations: {},
+  conversationSchemaVersion: 2,
 };
 
 let cache: DBData | null = null;
 
+const CONVERSATION_SEPARATOR = "::";
+const LEGACY_BACKUP_PATH = DB_PATH + ".pre-conversation-scope.bak";
+
+function conversationKey(userId: string, guildId: string): string {
+  return `${userId}${CONVERSATION_SEPARATOR}${guildId}`;
+}
+
+function normalizeMessages(value: unknown): ConversationMessage[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (message): message is ConversationMessage =>
+      typeof message === "object" &&
+      message !== null &&
+      ((message as ConversationMessage).role === "user" ||
+        (message as ConversationMessage).role === "assistant") &&
+      typeof (message as ConversationMessage).content === "string"
+  );
+}
+
+function normalizeDatabase(parsed: Partial<DBData>): { data: DBData; migrated: boolean } {
+  const data = {
+    ...structuredClone(EMPTY),
+    ...parsed,
+    legacyConversations: parsed.legacyConversations ?? {},
+    conversationSchemaVersion: parsed.conversationSchemaVersion ?? 1,
+  } as DBData;
+
+  let migrated = false;
+
+  if (!data.memories) data.memories = {};
+  if (!data.traits) data.traits = {};
+  if (!data.guildConfig) data.guildConfig = {};
+  if (!data.personas) data.personas = {};
+  if (!data.warnings) data.warnings = {};
+
+  // Old records used only the user ID. They are ambiguous because the
+  // previous schema did not store a guild ID, so preserve them separately
+  // instead of assigning them to an arbitrary guild.
+  if (data.conversationSchemaVersion < 2) {
+    const oldConversations = data.conversations;
+    data.conversations = {};
+
+    if (oldConversations && typeof oldConversations === "object") {
+      for (const [userId, messages] of Object.entries(oldConversations)) {
+        data.legacyConversations[userId] = normalizeMessages(messages);
+      }
+    }
+
+    data.conversationSchemaVersion = 2;
+    migrated = true;
+  } else {
+    data.conversations = Object.fromEntries(
+      Object.entries(data.conversations ?? {}).filter(([key, messages]) => {
+        return key.includes(CONVERSATION_SEPARATOR) && normalizeMessages(messages).length > 0;
+      })
+    );
+  }
+
+  return { data, migrated };
+}
+
 function load(): DBData {
   if (cache) return cache;
   try {
-    cache = JSON.parse(readFileSync(DB_PATH, "utf8")) as DBData;
-    // Back-fill new keys for existing records
-    if (!cache.memories) cache.memories = {};
-    if (!cache.traits) cache.traits = {};
+    const parsed = JSON.parse(readFileSync(DB_PATH, "utf8")) as Partial<DBData>;
+    const normalized = normalizeDatabase(parsed);
+    cache = normalized.data;
+
+    if (normalized.migrated) {
+      // Keep the original file before the first schema normalization. This
+      // backup is intentionally never overwritten by later bot writes.
+      if (!existsSync(LEGACY_BACKUP_PATH)) {
+        copyFileSync(DB_PATH, LEGACY_BACKUP_PATH);
+      }
+      save(cache);
+      console.log(
+        `[Azurion] Preserved ${Object.keys(cache.legacyConversations).length} ambiguous legacy conversation(s).`
+      );
+    }
   } catch {
     cache = structuredClone(EMPTY);
   }
@@ -106,17 +194,17 @@ export const db = {
   },
 
   // ── Conversations ─────────────────────────────────────────────────────────
-  getConversation(userId: string): ConversationMessage[] {
-    return load().conversations[userId] ?? [];
+  getConversation(userId: string, guildId: string): ConversationMessage[] {
+    return load().conversations[conversationKey(userId, guildId)] ?? [];
   },
-  setConversation(userId: string, messages: ConversationMessage[]): void {
+  setConversation(userId: string, guildId: string, messages: ConversationMessage[]): void {
     const data = load();
-    data.conversations[userId] = messages;
+    data.conversations[conversationKey(userId, guildId)] = normalizeMessages(messages);
     save(data);
   },
-  clearConversation(userId: string): void {
+  clearConversation(userId: string, guildId: string): void {
     const data = load();
-    delete data.conversations[userId];
+    delete data.conversations[conversationKey(userId, guildId)];
     save(data);
   },
 
