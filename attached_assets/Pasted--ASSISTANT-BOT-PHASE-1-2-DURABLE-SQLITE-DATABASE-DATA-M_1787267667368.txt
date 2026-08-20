@@ -1,0 +1,136 @@
+# ASSISTANT BOT — PHASE 1.2
+## DURABLE SQLITE DATABASE & DATA MIGRATION
+
+We are continuing the modernization of the existing Discord Assistant bot.
+
+The previous phase fixed conversation context isolation.
+
+The current conversation architecture is now scoped at minimum by:
+
+USER + GUILD
+
+The previous implementation intentionally kept the existing JSON storage system.
+
+The next foundation task is to replace the JSON persistence layer with a durable SQLite database while preserving ALL existing bot behavior and data.
+
+IMPORTANT:
+
+This is a DATABASE MIGRATION task.
+
+Do NOT use this opportunity to redesign unrelated bot functionality.
+
+Do NOT add new user-facing features.
+
+Do NOT add `/settings`.
+
+Do NOT redesign the memory system.
+
+Do NOT redesign personas or traits.
+
+Do NOT redesign the conversation system.
+
+Do NOT add milestones, statistics, profiles, or engagement systems.
+
+Do NOT change command behavior unless required to connect the existing functionality to the new database.
+
+Do NOT remove existing functionality.
+
+Do NOT delete the existing JSON database until migration has been verified.
+
+The objective is:
+
+JSON storage
+    ↓
+SAFE MIGRATION
+    ↓
+SQLite
+    ↓
+APPLICATION DATABASE SERVICE
+    ↓
+Existing bot functionality
+
+The bot should behave essentially the same to users after this phase, but its persistence layer should now be durable, structured, and scalable.
+
+---
+
+# 1. INSPECT THE CURRENT DATABASE IMPLEMENTATION
+
+Before making changes, inspect the actual existing storage code.
+
+Identify:
+
+- database files
+- JSON structure
+- database utilities
+- read operations
+- write operations
+- atomic write behavior
+- initialization
+- default values
+- every command/service that accesses stored data
+- every event that accesses stored data
+
+Create a mapping of current JSON data to the proposed SQLite representation.
+
+Do not assume the previous audit is completely accurate.
+
+Verify the current implementation against the source code.
+
+---
+
+# 2. CHOOSE SQLITE
+
+Use SQLite as the new persistent database.
+
+Use an established, well-supported Node.js SQLite library that is compatible with the existing project's Node.js/TypeScript setup and Replit environment.
+
+Do not introduce a large ORM or unnecessary database framework unless the existing project already uses one.
+
+Prefer a lightweight database layer that is:
+
+- reliable
+- easy to maintain
+- TypeScript-friendly
+- persistent on Replit
+- appropriate for a Discord bot
+- capable of transactions
+- capable of parameterized queries
+
+Explain the selected library and why it is appropriate.
+
+---
+
+# 3. CREATE A DATABASE ABSTRACTION LAYER
+
+Do not allow individual commands to directly manipulate SQLite.
+
+Create a centralized database/service layer.
+
+The exact structure should match the existing project conventions, but conceptually:
+
+database/
+    connection
+    schema
+    migrations
+
+services/
+    database-related services
+
+The goal is for commands/services to interact with meaningful application-level functions rather than raw SQL wherever practical.
+
+For example:
+
+```text
+conversationService.getHistory(...)
+conversationService.addMessage(...)
+conversationService.reset(...)
+
+memoryService.getMemories(...)
+memoryService.addMemory(...)
+memoryService.removeMemory(...)
+
+guildConfigService.get(...)
+guildConfigService.update(...)
+
+warningService.getWarnings(...)
+warningService.addWarning(...)
