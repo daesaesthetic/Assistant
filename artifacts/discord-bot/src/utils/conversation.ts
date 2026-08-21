@@ -16,6 +16,8 @@ import { conversationStore } from "./conversation-store.js";
 
 const CONTEXT_TOKEN_BUDGET = 12_000;
 const CHARS_PER_ESTIMATED_TOKEN = 4;
+// Conservative bound for one concise user fact; reject longer candidates.
+const MAX_MEMORY_LENGTH = 500;
 
 type PrimaryCompletionShape = {
   choices?: Array<{
@@ -23,6 +25,28 @@ type PrimaryCompletionShape = {
       content?: unknown;
     };
   }>;
+};
+
+type MemoryCompletionShape = {
+  choices?: Array<{
+    message?: {
+      content?: unknown;
+    };
+  }>;
+};
+
+type MemoryCompletionCreator = (
+  params: Parameters<typeof createGroqCompletion>[0],
+  options: Parameters<typeof createGroqCompletion>[1],
+) => Promise<unknown>;
+
+type MemoryExtractionDependencies = {
+  createCompletion?: MemoryCompletionCreator;
+  addMemories?: (
+    userId: string,
+    guildId: string,
+    facts: string[],
+  ) => Promise<void>;
 };
 
 const PERSONAS: Record<string, string> = {
@@ -270,14 +294,86 @@ export async function generateReply(params: {
   });
 }
 
-async function extractMemories(
+function createMemoryResponseError(
+  category: "empty_response" | "malformed_response",
+): GroqReliabilityError {
+  return new GroqReliabilityError({
+    category,
+    requestType: "memory",
+    model: TEXT_MODEL,
+    attempts: 1,
+    elapsedMs: 0,
+  });
+}
+
+export function parseMemoryCandidates(raw: unknown): string[] {
+  if (typeof raw !== "string") {
+    throw createMemoryResponseError("malformed_response");
+  }
+
+  const trimmedRaw = raw.trim();
+  if (!trimmedRaw) {
+    throw createMemoryResponseError("empty_response");
+  }
+
+  const match = trimmedRaw.match(/\[[\s\S]*\]/);
+  if (!match) {
+    throw createMemoryResponseError("malformed_response");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch {
+    throw createMemoryResponseError("malformed_response");
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw createMemoryResponseError("malformed_response");
+  }
+
+  return parsed.flatMap((value) => {
+    if (typeof value !== "string") return [];
+
+    const fact = value.trim();
+    if (!fact || fact === "..." || fact.length > MAX_MEMORY_LENGTH) {
+      return [];
+    }
+
+    return [fact];
+  });
+}
+
+function logMemoryFailure(error: unknown, fallbackCategory: string): void {
+  const context =
+    error instanceof GroqReliabilityError ? getGroqErrorLogContext(error) : {};
+  const category =
+    error instanceof GroqReliabilityError ? error.category : fallbackCategory;
+
+  console.error("[Azurion] Memory extraction failed", {
+    operation: "memory_extraction",
+    ...context,
+    category,
+  });
+}
+
+export async function extractMemories(
   userId: string,
   guildId: string,
   userMsg: string,
   assistantMsg: string,
+  dependencies: MemoryExtractionDependencies = {},
 ): Promise<void> {
+  const createCompletion =
+    dependencies.createCompletion ?? createGroqCompletion;
+  const addMemories =
+    dependencies.addMemories ??
+    ((ownerId, ownerGuildId, facts) =>
+      db.addMemories(ownerId, ownerGuildId, facts));
+
+  let completion: unknown;
   try {
-    const completion = await createGroqCompletion(
+    completion = await createCompletion(
       {
         model: TEXT_MODEL,
         messages: [
@@ -295,23 +391,26 @@ async function extractMemories(
       },
       { requestType: "memory" },
     );
-
-    const raw = completion.choices[0]?.message?.content?.trim() ?? "[]";
-    const match = raw.match(/\[[\s\S]*\]/);
-    if (!match) return;
-    const facts = JSON.parse(match[0]) as unknown;
-    if (Array.isArray(facts) && facts.length > 0) {
-      await db.addMemories(
-        userId,
-        guildId,
-        facts.filter((f): f is string => typeof f === "string"),
-      );
-    }
   } catch (error) {
-    // Memory extraction is non-critical and must not affect the primary reply.
-    console.error(
-      "[Azurion] Memory extraction failed",
-      getGroqErrorLogContext(error),
-    );
+    logMemoryFailure(error, "unknown");
+    return;
+  }
+
+  let facts: string[];
+  try {
+    const shape = completion as MemoryCompletionShape | null;
+    const raw = shape?.choices?.[0]?.message?.content;
+    facts = parseMemoryCandidates(raw);
+  } catch (error) {
+    logMemoryFailure(error, "malformed_response");
+    return;
+  }
+
+  if (facts.length === 0) return;
+
+  try {
+    await addMemories(userId, guildId, facts);
+  } catch (error) {
+    logMemoryFailure(error, "persistence");
   }
 }

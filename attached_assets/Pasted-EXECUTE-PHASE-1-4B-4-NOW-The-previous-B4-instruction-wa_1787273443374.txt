@@ -1,0 +1,505 @@
+EXECUTE PHASE 1.4B.4 NOW.
+
+The previous B4 instruction was truncated during transmission. The message you received is NOT authorization to invent missing requirements.
+
+Use the following complete specification as the authoritative B4 scope.
+
+This is an implementation request, not an audit or planning request.
+
+==================================================
+PHASE 1.4B.4 — MEMORY RELIABILITY
+==================================================
+
+B1, B2, and B3 are already implemented and committed.
+
+Preserve them.
+
+B4 ONLY addresses reliability, validation, bounds, persistence safety, and observability of the background memory-extraction pipeline.
+
+Do NOT implement B5 or redesign the memory architecture.
+
+--------------------------------------------------
+1. PRIMARY RULE
+--------------------------------------------------
+
+Memory extraction is NON-CRITICAL.
+
+A successful primary conversation response must remain successful if memory extraction:
+
+- fails
+- times out
+- is rate limited
+- returns malformed output
+- returns invalid JSON
+- returns invalid memory values
+- fails during SQLite persistence
+
+Memory extraction must never:
+
+- throw into the primary conversation flow
+- cause another primary Groq request
+- change the primary response
+- permanently block the B2 conversation queue
+
+--------------------------------------------------
+2. EXISTING GROQ RELIABILITY
+--------------------------------------------------
+
+Use the existing B1 shared Groq request boundary.
+
+Do NOT create a raw/direct Groq request for memory extraction.
+
+Preserve the existing memory-specific timeout, expected to be approximately 15 seconds unless the repository has a justified existing value.
+
+Do not create a second retry system.
+
+Do not stack SDK retries with application retries.
+
+Use the existing B1 error categories where applicable:
+
+- configuration
+- rate_limit
+- context
+- transient_provider
+- network
+- timeout
+- empty_response
+- malformed_response
+- unknown
+
+Database failures should use:
+
+- persistence
+
+--------------------------------------------------
+3. BACKGROUND EXECUTION
+--------------------------------------------------
+
+Memory extraction must remain background/best-effort.
+
+The intended sequence is:
+
+primary AI generation
+→ conversation persistence
+→ conversation queue releases
+→ background memory extraction
+
+A slow memory request must NOT hold the B2 per-conversation queue.
+
+Do not introduce a global lock.
+
+Do not make generateReply() wait for memory extraction.
+
+--------------------------------------------------
+4. MEMORY INPUT
+--------------------------------------------------
+
+Memory extraction may only run when B3 has produced a valid primary response.
+
+Use:
+
+- actual current user message
+- actual valid assistant response
+
+Do NOT run extraction after:
+
+- empty primary response
+- whitespace-only primary response
+- malformed primary response
+- failed primary AI generation
+
+The old "..." placeholder must never be used as memory input.
+
+--------------------------------------------------
+5. OUTPUT CONTRACT
+--------------------------------------------------
+
+The expected memory extraction output is a JSON array of strings.
+
+Valid example:
+
+["The user likes cats.","The user is working on a Discord bot."]
+
+Reject:
+
+- invalid JSON
+- JSON objects
+- numbers
+- booleans
+- null
+- nested objects
+- nested arrays
+- non-string array entries
+- empty strings
+- whitespace-only strings
+
+Do not infer memories from arbitrary prose.
+
+Do not build an elaborate natural-language parser.
+
+If the existing parser supports Markdown JSON fences, preserve/support that behavior. Otherwise do not create a complicated parser solely for B4.
+
+--------------------------------------------------
+6. NORMALIZATION
+--------------------------------------------------
+
+Candidate memory strings must be:
+
+- trimmed
+- non-empty
+- subject to a reasonable per-memory length limit
+
+If there is no existing explicit application limit, use a conservative bound appropriate for one user fact.
+
+Prefer REJECTING an overlong candidate rather than silently truncating it into a potentially corrupted fact.
+
+Document the chosen limit.
+
+Do not redesign the memory architecture.
+
+--------------------------------------------------
+7. MEMORY LIMIT
+--------------------------------------------------
+
+Preserve the existing maximum of approximately 30 memories per user/guild.
+
+Do NOT:
+
+- increase it
+- remove it
+- redesign retention
+- add ranking
+- add decay
+- add semantic memory
+
+If the existing database already enforces the limit, preserve that implementation.
+
+Only fix a concurrency/cap issue if the current implementation demonstrably allows B4 to violate the existing limit.
+
+Do not create a migration unless absolutely necessary.
+
+--------------------------------------------------
+8. DUPLICATES
+--------------------------------------------------
+
+Preserve the existing case-insensitive duplicate protection.
+
+Do NOT introduce:
+
+- embeddings
+- semantic similarity
+- vector search
+- fuzzy matching
+- AI deduplication
+
+Normalization must not accidentally bypass the existing duplicate protection.
+
+--------------------------------------------------
+9. MEMORY PERSISTENCE FAILURE
+--------------------------------------------------
+
+If:
+
+primary AI succeeds
++
+conversation persistence succeeds
++
+memory persistence fails
+
+then:
+
+- primary response remains successful
+- memory failure is logged
+- failure is classified as persistence
+- no database details reach Discord
+- no primary AI request is repeated
+- B2 queue remains unaffected
+
+Memory persistence is best-effort.
+
+Do not silently convert the primary response into a failure.
+
+--------------------------------------------------
+10. OBSERVABILITY
+--------------------------------------------------
+
+Remove silent failure behavior from memory extraction where practical.
+
+Log safe structured information such as:
+
+- operation: memory_extraction
+- error category
+- request type/model
+- elapsed time if available
+- retry state if available
+- safe user/guild context if the existing logging convention supports it
+
+NEVER log:
+
+- API keys
+- credentials
+- complete prompts
+- complete user messages
+- complete assistant responses
+- raw extraction output
+- database secrets
+
+Keep logging concise.
+
+--------------------------------------------------
+11. EMPTY MEMORY RESPONSE
+--------------------------------------------------
+
+If memory Groq returns no usable content:
+
+- classify it using the existing reliability behavior
+- add no memories
+- log safely
+- terminate the background task
+- leave the primary response untouched
+
+Never store:
+
+""
+
+"   "
+
+"..."
+
+as memories.
+
+--------------------------------------------------
+12. NO MEMORY ARCHITECTURE REDESIGN
+--------------------------------------------------
+
+Explicitly DO NOT implement:
+
+- embeddings
+- vector databases
+- semantic retrieval
+- relevance scoring
+- importance scoring
+- memory decay
+- automatic memory deletion
+- memory summarization
+- memory ranking
+- clustering
+- LLM-based deduplication
+- new memory schema
+- new memory migration
+
+B4 is reliability only.
+
+--------------------------------------------------
+13. TESTS
+--------------------------------------------------
+
+Use the repository's existing test framework.
+
+Do not make real Groq API requests.
+
+At minimum test:
+
+1. Valid extraction
+   → valid memory stored.
+
+2. Multiple valid memories
+   → valid memories stored and existing 30-memory limit preserved.
+
+3. Empty array
+   → no database write and primary response unaffected.
+
+4. Invalid JSON
+   → safe failure, no memory, logged, primary response unaffected.
+
+5. JSON object instead of array
+   → rejected.
+
+6. Mixed invalid array:
+
+[
+  "The user likes cats.",
+  123,
+  null,
+  {"fact":"bad"}
+]
+
+→ invalid entries must not enter storage.
+
+If the existing contract is all-or-nothing for the array, preserve that stricter behavior and document it.
+
+7. Empty/whitespace strings
+   → rejected.
+
+8. Overlong memory
+   → rejected rather than silently corrupted/truncated.
+
+9. Duplicate memory
+   → existing duplicate protection prevents duplicate storage.
+
+10. Memory Groq failure
+   → primary response remains successful.
+
+11. Memory timeout/rate-limit/network/provider failure
+   → primary response remains successful and failure is observable.
+
+12. Memory persistence failure
+   → primary response remains successful and persistence failure is logged.
+
+13. Slow memory extraction
+   → B2 conversation queue releases before memory extraction completes.
+
+14. Invalid B3 primary response
+   → memory extraction is never invoked.
+
+--------------------------------------------------
+14. TEST THE REAL BOUNDARY
+--------------------------------------------------
+
+Where practical, test the actual extractMemories() boundary.
+
+The key contract is:
+
+extractMemories()
+
+must be best-effort and must never turn memory failure into conversation failure.
+
+--------------------------------------------------
+15. DATABASE SAFETY
+--------------------------------------------------
+
+Inspect the existing SQLite implementation first.
+
+Preserve:
+
+- schema
+- migrations
+- uniqueness constraints
+- 30-memory limit
+- transaction behavior
+
+Do not create a migration unless absolutely necessary.
+
+If a schema change appears necessary, STOP and report why rather than silently expanding B4 scope.
+
+--------------------------------------------------
+16. DEPENDENCIES
+--------------------------------------------------
+
+Do not add runtime dependencies.
+
+Use existing:
+
+- Groq SDK
+- database layer
+- test framework
+- validation utilities if already present
+
+--------------------------------------------------
+17. VERIFICATION
+--------------------------------------------------
+
+After implementation run:
+
+pnpm --filter @workspace/discord-bot run typecheck
+
+pnpm run typecheck
+
+git diff --check
+
+Also run:
+
+- complete existing bot test suite
+- all B4 tests
+- formatting/Prettier checks
+
+Verify B1, B2, and B3 tests still pass.
+
+Do not make real external AI requests.
+
+If SQLite WAL/SHM runtime artifacts appear during testing, restore/remove them before completion.
+
+--------------------------------------------------
+18. FINAL DIFF
+--------------------------------------------------
+
+Inspect the complete Git diff.
+
+Confirm only B4-related changes exist.
+
+Do NOT modify:
+
+- prompts
+- personas
+- traits
+- token budgeting
+- B1 retry architecture
+- B2 queue architecture
+- B3 response/persistence behavior
+- Replit configuration
+- unrelated Discord commands
+- unrelated cleanup
+
+--------------------------------------------------
+19. FINAL REPORT
+--------------------------------------------------
+
+Report:
+
+### Implementation
+How extraction validation, normalization, bounds, and malformed output handling work.
+
+### Persistence
+How duplicates and the 30-memory limit remain protected, and how persistence failures behave.
+
+### Reliability
+Timeout, error classification, and observability behavior.
+
+### B2 compatibility
+Confirm memory extraction does not hold the conversation queue.
+
+### B3 compatibility
+Confirm invalid primary responses never trigger memory extraction.
+
+### Files changed
+Every changed/added file.
+
+### Tests
+Exact tests and results.
+
+### Verification
+Typecheck, tests, formatting, git diff --check.
+
+### Remaining
+Confirm B5 is the next scoped track.
+
+--------------------------------------------------
+COMPLETION CRITERIA
+--------------------------------------------------
+
+B4 is complete only when:
+
+- memory extraction is strictly best-effort
+- invalid JSON cannot create malformed memories
+- non-string/empty values cannot enter storage
+- overlong candidates are safely rejected
+- duplicate protection remains intact
+- the existing 30-memory limit remains intact
+- memory persistence failures cannot break the primary AI response
+- memory extraction uses B1's shared Groq reliability boundary
+- memory extraction does not hold the B2 conversation queue
+- invalid B3 primary responses never trigger memory extraction
+- B1, B2, and B3 remain intact
+- tests pass
+- verification passes
+- no B5 work is implemented
+
+EXECUTE THE IMPLEMENTATION NOW.
+
+Do not perform another audit.
+
+Do not ask me what I want done.
+
+Do not invent requirements outside this specification.
+
+Inspect → modify → test → verify → report.
