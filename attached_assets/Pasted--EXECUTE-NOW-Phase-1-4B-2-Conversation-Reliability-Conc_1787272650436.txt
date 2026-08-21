@@ -1,0 +1,312 @@
+# EXECUTE NOW — Phase 1.4B.2 Conversation Reliability & Concurrency
+
+This is an **ACTIVE IMPLEMENTATION REQUEST**.
+
+You are authorized to modify the current Assistant-Beta-2.5 repository.
+
+Do NOT treat this message as a setup prompt, planning prompt, audit request, or optional follow-up.
+
+**Implement Phase 1.4B.2 now.**
+
+The previous agent already completed and committed:
+
+> Phase 1.4B.1 — Shared Groq Reliability Layer
+
+The current repository is the source of truth.
+
+---
+
+## First: Inspect, Then Implement
+
+Before editing:
+
+1. Inspect the current Git status.
+2. Inspect the existing conversation implementation.
+3. Confirm B1 is present in `src/utils/groq.ts`.
+4. Inspect:
+
+   * `artifacts/discord-bot/src/utils/conversation.ts`
+   * `artifacts/discord-bot/src/utils/conversation-store.ts`
+   * `artifacts/discord-bot/src/database/index.ts`
+   * `artifacts/discord-bot/src/commands/talk.ts`
+   * `artifacts/discord-bot/src/events/messageCreate.ts`
+5. Determine whether the current bot runs as a single process or multiple processes.
+
+Then **implement B2 in the repository**.
+
+Do not stop after inspection.
+
+Do not merely provide a proposed plan.
+
+Do not ask me whether I want you to proceed.
+
+You are authorized to proceed after inspection.
+
+---
+
+# B2 OBJECTIVE
+
+Fix the conversation read-modify-write race condition.
+
+The current problem is conceptually:
+
+```text
+Request A → read history
+Request B → read same history
+
+Request A → generate → write history A
+Request B → generate → write history B
+
+Result:
+B can overwrite A's exchange.
+```
+
+For the same conversation context, requests must be serialized so the later request sees the earlier request's persisted result.
+
+---
+
+# REQUIRED SCOPE
+
+Serialize by the existing conversation scope:
+
+```text
+(userId, guildId)
+```
+
+Do NOT create a global AI lock.
+
+These must remain capable of running concurrently:
+
+```text
+User A / Guild X
+User B / Guild X
+User A / Guild Y
+```
+
+Only the same conversation context should wait.
+
+---
+
+# IMPLEMENTATION
+
+Use the smallest safe mechanism appropriate for the actual deployment architecture.
+
+If the current bot is a single process, prefer a lightweight in-memory per-conversation async lock/queue.
+
+Requirements:
+
+* Same `(userId, guildId)` requests serialize.
+* Different contexts remain concurrent.
+* Locks/queues are cleaned up when idle.
+* Failed requests release the lock.
+* Timeouts release the lock.
+* Persistence failures release the lock.
+* Unexpected exceptions release the lock.
+* No new queue/locking dependency.
+* No polling loop.
+* No unbounded lock-map growth.
+
+The protected workflow must cover the relevant:
+
+```text
+load history
+→ build context
+→ generate AI response
+→ persist history
+```
+
+Do NOT merely lock the final database write.
+
+Do NOT hold a SQLite transaction open while waiting for Groq.
+
+---
+
+# RESET
+
+Inspect the existing `/talk reset` behavior and make it deterministic with the new serialization.
+
+A reset must not be followed by an already-running stale request writing old conversation history back over the reset.
+
+Prefer:
+
+```text
+existing request completes
+→ reset executes
+→ conversation is cleared
+→ future request sees cleared history
+```
+
+If the current architecture requires a different safe implementation, use the smallest correct solution.
+
+---
+
+# B1 COMPATIBILITY
+
+B1 is already complete.
+
+Do NOT redo it.
+
+Do NOT replace the Groq reliability layer.
+
+B2 must correctly release the conversation lock when B1 produces:
+
+* timeout
+* rate-limit failure
+* transient failure
+* configuration failure
+* other AI error
+
+A failed AI request must never leave a conversation permanently locked.
+
+---
+
+# DO NOT IMPLEMENT THESE
+
+This task is ONLY B2.
+
+Do NOT implement:
+
+### B3
+
+* Empty-response redesign
+* `"..."` fallback removal
+* malformed-response redesign
+* response persistence changes unrelated to concurrency
+
+### B4
+
+* Memory validation
+* Memory architecture changes
+* Memory persistence redesign
+
+### B5
+
+* New user-facing AI error messages
+* Broad Discord UX changes
+* General AI architecture redesign
+
+Do not change prompts, personas, traits, token budgeting, or database schema.
+
+---
+
+# DATABASE
+
+Do not modify:
+
+* schema
+* migrations
+* table definitions
+* conversation storage format
+
+unless the repository inspection proves that the current deployment is multi-process and an in-memory lock cannot provide correctness.
+
+If a database-level solution genuinely becomes necessary, explain why and use the smallest safe change.
+
+Otherwise, keep the solution application-level.
+
+---
+
+# TESTS
+
+Implement focused tests using the repository's existing testing conventions.
+
+Test:
+
+1. Two same-context requests serialize.
+2. The second request sees the first request's updated history.
+3. Two different users can run concurrently.
+4. Same user in different guilds can run concurrently.
+5. AI failure releases the lock.
+6. Timeout releases the lock.
+7. Persistence failure releases the lock.
+8. Unexpected exception releases the lock.
+9. `/talk` and automatic mention requests share serialization.
+10. Reset cannot be overwritten by stale in-flight persistence.
+11. Idle locks are cleaned up.
+
+Do not make tests depend on real Groq API calls.
+
+---
+
+# VERIFICATION
+
+After implementation, actually run:
+
+```text
+pnpm --filter @workspace/discord-bot run typecheck
+pnpm run typecheck
+```
+
+Also run the repository's existing test suite and formatting/check commands if available.
+
+Run:
+
+```text
+git diff --check
+```
+
+Inspect the final diff.
+
+Confirm:
+
+* B1 remains intact.
+* No secrets were changed.
+* No database schema/migrations changed.
+* No unrelated Phase 1.4 tracks were implemented.
+* No unnecessary dependencies were added.
+
+---
+
+# IMPORTANT EXECUTION RULE
+
+The previous response incorrectly treated the B2 specification as a non-actionable setup request.
+
+Do not repeat that behavior.
+
+**This message is the implementation authorization.**
+
+You are expected to:
+
+**inspect → edit → test → verify → report**
+
+not:
+
+**inspect → describe → wait**
+
+---
+
+# FINAL RESPONSE
+
+After implementation, report:
+
+### Implementation
+
+What was changed and how the concurrency mechanism works.
+
+### Scope
+
+Which files changed.
+
+### Reset behavior
+
+Exactly how reset interacts with in-flight requests.
+
+### Failure safety
+
+How locks are released on AI, timeout, persistence, and unexpected failures.
+
+### Tests
+
+Exactly what passed/failed.
+
+### Verification
+
+Typecheck, formatting, `git diff --check`, etc.
+
+### Remaining
+
+State that the next task is:
+
+> **Phase 1.4B.3 — Empty Response & Persistence Reliability**
+
+Do not claim B2 is complete if verification fails.
