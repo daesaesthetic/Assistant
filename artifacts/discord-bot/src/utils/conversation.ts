@@ -13,9 +13,10 @@ import {
 } from "./groq.js";
 import { db } from "../database/index.js";
 import { conversationStore } from "./conversation-store.js";
-
-const CONTEXT_TOKEN_BUDGET = 12_000;
-const CHARS_PER_ESTIMATED_TOKEN = 4;
+import {
+  buildConversationContext,
+  type ConversationHistoryMessage,
+} from "./conversation-context.js";
 // Conservative bound for one concise user fact; reject longer candidates.
 const MAX_MEMORY_LENGTH = 500;
 
@@ -62,112 +63,21 @@ const PERSONAS: Record<string, string> = {
     "You are a cryptic oracle. Speak in metaphors and abstractions, hinting at deeper truths without stating them plainly.",
 };
 
-type ChatMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
-};
-
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / CHARS_PER_ESTIMATED_TOKEN);
-}
-
-function trimToTokenBudget(text: string, tokenBudget: number): string {
-  if (tokenBudget <= 0) return "";
-  const maxCharacters = tokenBudget * CHARS_PER_ESTIMATED_TOKEN;
-  if (text.length <= maxCharacters) return text;
-  if (maxCharacters <= 1) return text.slice(0, maxCharacters);
-  return `${text.slice(0, maxCharacters - 1)}…`;
-}
-
-function buildSystemPrompt(
-  botName: string,
-  personaName?: string,
-  customDesc?: string,
-  traits?: string[],
-): string {
-  // ── Core identity (always present) ───────────────────────────────────────
-  const identity = `You are ${botName}. You are a capable, perceptive assistant with a clean, slightly mysterious presence — never robotic, never overly enthusiastic. You are concise, context-aware, and genuine. Never break character. Never mention being an AI, a language model, or any underlying technology. Respond as ${botName} at all times.`;
-
-  // ── Capabilities (so the bot can answer "what can you do?" accurately) ───
-  const capabilities = `
-
-Your capabilities — when a user asks what you can do, draw from this list naturally. Never recite it verbatim:
-• Ongoing conversation with persistent memory of the user across sessions
-• Suggestions: provide high-quality, reasoned suggestions on any topic (/suggest)
-• Image transformation: interpret and transform images via written instructions (/edit)
-• Web search: look up current information (/search)
-• Personas: users can change your conversation style — Analyst, Observer, Strategist, Minimalist, Oracle, or a fully custom description (/persona)
-• Traits: users can layer personality modifiers — e.g. flirty, sarcastic, blunt, warm — on top of the active persona (/traits add)
-• Memory: you remember facts the user shares and surface them naturally; users can view or clear them (/memories)
-• Bot name: server admins can rename you per-server (/name set)
-• Conversation channels: admins can create a dedicated channel where you reply to every message freely, no command needed (/channel create)`;
-
-  // ── Traits (layer personality modifiers, if set) ──────────────────────────
-  const traitSection =
-    traits && traits.length > 0
-      ? `\n\nPersonality traits currently active — embody these naturally and consistently. Let them shape your tone, word choice, and attitude without ever announcing them:\n${traits.map((t) => `• ${t}`).join("\n")}`
-      : "";
-
-  // ── Persona / conversation style (applied as primary behavioral filter) ───
-  let styleSection = "";
-  if (personaName === "custom" && customDesc?.trim()) {
-    styleSection = `\n\nConversation style override:\n${customDesc.trim()}`;
-  } else if (personaName && PERSONAS[personaName]) {
-    styleSection = `\n\nConversation style:\n${PERSONAS[personaName]}`;
-  }
-
-  return identity + capabilities + traitSection + styleSection;
+  return Math.ceil(text.length / 3.5);
 }
 
 export function buildBudgetedMessages(
   systemPrompt: string,
-  history: Array<{ role: "user" | "assistant"; content: string }>,
+  history: ConversationHistoryMessage[],
   currentContent: string,
-): ChatMessage[] {
-  const currentMessage: ChatMessage = { role: "user", content: currentContent };
-  const currentTokens = estimateTokens(currentContent);
-  const availableForSystemAndHistory = Math.max(
-    0,
-    CONTEXT_TOKEN_BUDGET - currentTokens,
-  );
-
-  // The system prompt is assembled in priority order. If it is too large,
-  // preserve the stable instructions and trim the lower-priority tail first.
-  const systemMessage: ChatMessage = {
-    role: "system",
-    content: trimToTokenBudget(systemPrompt, availableForSystemAndHistory),
-  };
-  let remainingTokens = Math.max(
-    0,
-    availableForSystemAndHistory - estimateTokens(systemMessage.content),
-  );
-
-  // Select recent history first, then restore chronological ordering.
-  const selectedHistory: Array<{
-    role: "user" | "assistant";
-    content: string;
-  }> = [];
-  for (
-    let index = history.length - 1;
-    index >= 0 && remainingTokens > 0;
-    index -= 1
-  ) {
-    const message = history[index];
-    const messageTokens = estimateTokens(message.content);
-    if (messageTokens <= remainingTokens) {
-      selectedHistory.unshift(message);
-      remainingTokens -= messageTokens;
-      continue;
-    }
-
-    // An oversized historical message is lower priority than the current
-    // request, so keep only the portion that fits and stop before older turns.
-    const trimmed = trimToTokenBudget(message.content, remainingTokens);
-    if (trimmed) selectedHistory.unshift({ ...message, content: trimmed });
-    break;
-  }
-
-  return [systemMessage, ...selectedHistory, currentMessage];
+): Array<{ role: "system" | "user" | "assistant"; content: string }> {
+  return buildConversationContext({
+    botName: "Azurion",
+    persona: { customDescription: systemPrompt, personaName: "custom" },
+    history,
+    currentMessage: currentContent,
+  }).messages;
 }
 
 function createResponseError(
@@ -243,21 +153,20 @@ export async function generateReply(params: {
     const memories = await db.getMemories(userId, guildId);
     const traits = await db.getTraits(userId, guildId);
 
-    let systemPrompt = buildSystemPrompt(
-      botName,
-      persona?.personaName,
-      persona?.customDescription,
-      traits,
-    );
-
-    if (memories.length > 0) {
-      systemPrompt +=
-        "\n\nThings you know about this user — reference naturally when relevant, never recite the whole list:\n" +
-        memories.map((m) => `- ${m}`).join("\n");
-    }
-
     const history = await conversationStore.getHistory(context);
-    const messages = buildBudgetedMessages(systemPrompt, history, content);
+    const messages = buildConversationContext({
+      botName,
+      persona: persona
+        ? {
+            personaName: persona.personaName,
+            customDescription: persona.customDescription,
+          }
+        : undefined,
+      traits,
+      memories,
+      history,
+      currentMessage: content,
+    }).messages;
 
     const completion = await createGroqCompletion(
       {

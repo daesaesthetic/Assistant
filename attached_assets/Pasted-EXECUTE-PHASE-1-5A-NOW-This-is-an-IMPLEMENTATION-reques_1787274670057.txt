@@ -1,0 +1,347 @@
+EXECUTE PHASE 1.5A NOW.
+
+This is an IMPLEMENTATION request.
+
+The repository has completed and passed Phase 1.4B (B1–B5), including the combined final audit.
+
+B1–B5 are authoritative existing architecture.
+
+DO NOT redesign, undo, or duplicate their reliability behavior.
+
+==================================================
+OBJECTIVE
+==================================================
+
+Begin Phase 1.5 — AI Context Architecture.
+
+Phase 1.5A focuses ONLY on restructuring and hardening the context assembled for the primary conversation request.
+
+The goal is to establish a clean context-building boundary that can later support:
+
+- relevant memory selection
+- durable conversation summaries
+- better long-conversation continuity
+- more accurate token budgeting
+
+Do NOT implement those future features yet.
+
+==================================================
+CURRENT PROBLEM
+==================================================
+
+The current conversation system combines:
+
+- system instructions
+- persona
+- traits
+- memories
+- recent conversation history
+- current message
+
+into a provider request.
+
+The existing approximate context budget is useful but not a sufficiently explicit architecture for future expansion.
+
+Phase 1.5A must create a clear separation between:
+
+1. Stable system instructions
+2. Persona
+3. Traits
+4. Memory context
+5. Conversation history
+6. Current user message
+
+==================================================
+IMPLEMENTATION REQUIREMENTS
+==================================================
+
+Create or refactor a dedicated context-building boundary.
+
+The conversation layer should be able to request something conceptually equivalent to:
+
+buildConversationContext({
+  botName,
+  persona,
+  traits,
+  memories,
+  history,
+  currentMessage
+})
+
+and receive a validated model-message list or equivalent structured result.
+
+The exact API is implementation-dependent.
+
+The important requirement is architectural separation.
+
+The context builder must own:
+
+- section construction
+- ordering
+- context-size estimation
+- history reduction
+- memory/context bounds
+- preservation of the current message
+
+`generateReply()` should remain responsible for orchestration, not detailed context-budget logic.
+
+==================================================
+BUDGETING
+==================================================
+
+Replace the current informal budgeting behavior with an explicit, centralized budget policy.
+
+Requirements:
+
+- Preserve the current model.
+- Preserve the current 800-token output limit unless the repository demonstrates a compelling reason otherwise.
+- Reserve output capacity when calculating the input budget.
+- Never remove the current user message.
+- Prefer retaining recent conversation over older conversation.
+- Never silently create an invalid message sequence.
+- Avoid relying exclusively on `characters / 4` as if it were exact tokenization.
+
+If an exact provider tokenizer is unavailable, use a clearly documented conservative estimator.
+
+The implementation must expose the budget decision in a testable way.
+
+Example conceptual result:
+
+{
+  messages,
+  estimatedInputTokens,
+  reservedOutputTokens,
+  truncatedHistory,
+  truncatedContext
+}
+
+The exact interface is up to the implementation.
+
+==================================================
+PRIORITY ORDER
+==================================================
+
+When context must be reduced, use this priority:
+
+1. Current user message — NEVER remove
+2. Stable system instructions
+3. Recent conversation history
+4. Persona
+5. Traits
+6. Memory context
+7. Older conversation history
+
+Do not arbitrarily delete the entire system prompt merely to fit history.
+
+Do not implement memory relevance ranking yet.
+
+==================================================
+MEMORIES
+==================================================
+
+For this phase:
+
+- Continue using the existing memory store.
+- Do not introduce semantic relevance.
+- Do not introduce embeddings.
+- Do not redesign the database.
+- Do not add memory ranking.
+
+However, memory context must now have an explicit budget.
+
+If memory content exceeds its allocation:
+
+- preserve the most useful deterministic subset using a simple documented rule
+- do not perform an additional AI request
+- do not mutate stored memories
+
+The stored memory database remains unchanged.
+
+==================================================
+PERSONA / TRAITS
+==================================================
+
+Preserve existing persona and trait behavior.
+
+Do not rewrite their meaning.
+
+Give them explicit bounded context sections.
+
+Custom persona text and traits must not be allowed to consume the entire context budget.
+
+Stored data must be bounded before being inserted into the final model request.
+
+==================================================
+HISTORY
+==================================================
+
+Preserve the existing B2 conversation queue.
+
+Preserve the existing history persistence behavior.
+
+Do not change the database schema.
+
+History may be reduced for the model request without deleting persisted history.
+
+Prefer the newest messages when truncation is necessary.
+
+The current message must always remain present.
+
+==================================================
+PROMPT COMPATIBILITY
+==================================================
+
+Do not redesign the assistant's personality or system instructions.
+
+Do not change:
+
+- bot identity
+- personas
+- traits semantics
+- memory semantics
+- user-facing command behavior
+
+This phase is about STRUCTURE and BUDGETING, not personality.
+
+==================================================
+RELIABILITY COMPATIBILITY
+==================================================
+
+B1–B5 remain authoritative.
+
+Do not modify:
+
+- Groq retry ownership
+- Groq timeout behavior
+- Groq error categories
+- B2 conversation locking
+- B3 response validation
+- B3 persisted contract
+- B4 memory extraction
+- B5 caller error handling
+
+The new context builder must integrate beneath the existing conversation reliability architecture.
+
+==================================================
+TESTS
+==================================================
+
+Add focused unit tests.
+
+At minimum verify:
+
+1. Normal context construction.
+2. Correct section ordering.
+3. Current message is always preserved.
+4. Recent history is preferred over older history.
+5. History truncates predictably.
+6. Memory context has a bounded allocation.
+7. Traits/persona cannot consume the entire budget.
+8. Oversized current messages are handled safely.
+9. The final estimated request fits the configured input budget.
+10. Output-token reservation is accounted for.
+11. Empty optional sections do not produce malformed messages.
+12. Existing B1–B5 tests remain passing.
+
+Do NOT make real Groq requests.
+
+==================================================
+DEPENDENCIES
+==================================================
+
+Do not add runtime dependencies unless absolutely necessary.
+
+Prefer existing utilities and TypeScript.
+
+Do not introduce a tokenizer dependency solely for this phase unless the repository already contains one.
+
+==================================================
+VERIFICATION
+==================================================
+
+Run:
+
+pnpm --filter @workspace/discord-bot run typecheck
+
+pnpm run typecheck
+
+Complete bot test suite
+
+Prettier check on changed files
+
+git diff --check
+
+Inspect the final Git diff.
+
+No database migrations.
+
+No schema changes.
+
+No secrets.
+
+No Replit workflow changes.
+
+No unrelated cleanup.
+
+==================================================
+SCOPE BOUNDARY
+==================================================
+
+DO NOT implement:
+
+- semantic memory retrieval
+- embeddings
+- vector databases
+- memory ranking
+- memory importance scoring
+- conversation summarization
+- automatic conversation summaries
+- model changes
+- prompt personality redesign
+- new persistence architecture
+- distributed locking
+- B6 reliability work
+
+Those belong to later phases.
+
+==================================================
+COMPLETION CRITERIA
+==================================================
+
+Phase 1.5A is complete when:
+
+- context construction has a dedicated architectural boundary
+- budgeting is centralized and explicit
+- output capacity is reserved
+- current user input is always preserved
+- recent history is prioritized
+- optional context is bounded
+- persisted history is not destructively modified during truncation
+- B1–B5 behavior remains intact
+- tests pass
+- typechecks pass
+- formatting passes
+- git diff --check passes
+- no unrelated changes exist
+
+FINAL RESPONSE FORMAT:
+
+# Implementation Report — Phase 1.5A
+
+## Architecture
+## Context Budget
+## History Behavior
+## Memory Behavior
+## Tests
+## Verification
+## Compatibility
+## Files Changed
+## Remaining Phase 1.5 Work
+
+IMPLEMENT NOW.
+
+Do not perform another audit.
+
+Do not ask for clarification unless the repository contains a genuine architectural conflict that makes the requirements impossible to satisfy safely.
+
+Inspect → implement → test → verify → report.
