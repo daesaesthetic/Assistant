@@ -47,3 +47,9 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Discord bot runtime data
+artifacts/discord-bot/data/*.sqlite
+artifacts/discord-bot/data/*.sqlite-*
+artifacts/discord-bot/data/*.bak
+artifacts/discord-bot/data/db.json

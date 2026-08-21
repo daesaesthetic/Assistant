@@ -1,0 +1,105 @@
+# EXECUTE PHASE 1.5F NOW — PRE-RELEASE HARDENING
+
+This is an implementation request, not a review request.
+
+The Phase 1.5F specification is already available in the workspace. Use it as the authoritative scope.
+
+EXECUTE the Phase 1.5F pre-release hardening audit against the CURRENT repository.
+
+Do not ask what to do with the specification.
+Do not merely summarize it.
+Do not leave the repository unchanged simply because the specification is an attachment.
+
+First inspect the current implementation, then perform the required Phase 1.5F work.
+
+## SCOPE
+
+Phase 1.5F is strictly a pre-release hardening pass.
+
+Verify and, where necessary, fix only concrete release-blocking or clearly user-visible issues involving:
+
+- Repository health
+- Secret/configuration safety
+- Discord command and interaction handling
+- Groq request routing and reliability
+- Conversation queue/reset behavior
+- Conversation persistence
+- Memory extraction safety
+- Context integrity
+- User-facing error safety
+- Logging safety
+- Startup/configuration behavior
+
+Do NOT introduce:
+
+- New AI architecture
+- New memory architecture
+- Embeddings
+- Vector search
+- RAG
+- Conversation summarization
+- New databases
+- New dependencies unless strictly required to fix an existing release blocker
+- New analytics infrastructure
+- Speculative scalability work
+- Cosmetic refactors
+
+Preserve all existing B1–B5 and 1.5A–1.5E behavior.
+
+## IMPORTANT
+
+A clean audit does NOT require artificial code changes.
+
+If the current implementation already satisfies a requirement, leave it unchanged.
+
+If a real release-blocking or clearly user-visible issue is found, fix it minimally and test it.
+
+Do not modify code merely to demonstrate activity.
+
+## VERIFICATION
+
+Run:
+
+- Complete Discord bot test suite
+- Workspace tests where applicable
+- Discord bot typecheck
+- Workspace typecheck
+- Prettier on changed files
+- git diff --check
+- git status
+- Final diff inspection
+
+Do NOT start the Discord workflow or make external Discord/Groq requests.
+
+Do NOT expose or request secret values.
+
+## FINAL REPORT
+
+Return exactly:
+
+### Phase 1.5F Result
+PASS / PASS WITH MANUAL CONFIGURATION / BLOCKED
+
+### Findings
+Concise list of actual findings.
+
+### Changes
+Only files actually modified.
+
+### Verification
+Exact test, typecheck, formatting, and diff results.
+
+### Release Blockers
+Only genuine blockers.
+
+### Manual Deployment Checklist
+Include only requirements confirmed by the repository or clearly marked "manual confirmation required."
+
+### Deferred
+Useful improvements that should wait until after live testing.
+
+If no code changes are necessary, explicitly state:
+
+"No implementation changes were necessary; the current repository already satisfies the Phase 1.5F scope."
+
+Do not claim completion unless verification actually passes.
