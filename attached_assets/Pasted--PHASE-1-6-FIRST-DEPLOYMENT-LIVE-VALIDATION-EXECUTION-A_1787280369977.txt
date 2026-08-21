@@ -1,0 +1,480 @@
+# PHASE 1.6 — FIRST DEPLOYMENT & LIVE VALIDATION
+## EXECUTION AUTHORITY
+
+You are now responsible for taking the current Assistant/Azurion Discord bot from
+"READY WITH MANUAL CONFIGURATION REQUIRED" to a verified first live deployment.
+
+This is a DEPLOYMENT AND VALIDATION phase.
+
+Do NOT redesign the bot.
+Do NOT introduce new architecture.
+Do NOT add speculative features.
+Do NOT begin another reliability or intelligence phase unless a concrete release-blocking defect is discovered.
+
+The objective is simple:
+
+1. Verify the repository is in the expected Phase 1.5F state.
+2. Verify the runtime configuration.
+3. Guide the operator through secure secret configuration.
+4. Deploy the Discord bot.
+5. Verify command registration.
+6. Perform controlled live testing.
+7. Fix only genuine deployment/runtime defects discovered during validation.
+8. Report exactly what passed, what failed, and what remains manual.
+
+--------------------------------------------------
+## AUTHORITATIVE BASELINE
+--------------------------------------------------
+
+The current project has completed:
+
+- Phase 1.4B.1 — Shared Groq Reliability Layer
+- Phase 1.4B.2 — Conversation Concurrency
+- Phase 1.4B.3 — Response Validation & Persistence Separation
+- Phase 1.4B.4 — Memory Reliability
+- Phase 1.4B.5 — Caller-Level AI Error Handling
+- Phase 1.5A — Context Boundary
+- Phase 1.5B — Context improvements
+- Phase 1.5C — Context Relevance & Memory Intelligence
+- Phase 1.5D — Conversation Quality Refinement
+- Phase 1.5E — Personality & Memory Behavior Refinement
+- Phase 1.5F — Pre-Release Hardening
+
+Phase 1.5F established:
+
+- Runtime SQLite files are ignored and no longer tracked.
+- Historical JSON database snapshots/backups are no longer tracked.
+- Fresh deployments initialize a clean runtime database.
+- No hardcoded credentials were found.
+- Groq requests remain centralized through the shared reliability layer.
+- Existing tests and typechecks pass.
+- The project is READY WITH MANUAL CONFIGURATION REQUIRED.
+
+Do not undo these release-hardening changes.
+
+--------------------------------------------------
+## STEP 1 — REPOSITORY VERIFICATION
+--------------------------------------------------
+
+Before changing anything:
+
+Inspect the current repository and verify that the expected Phase 1.5F state is present.
+
+Confirm:
+
+- Git working tree state
+- Current branch/revision
+- `.gitignore`
+- `replit.md`
+- Discord bot package scripts
+- Discord workflow configuration
+- Required environment-variable references
+- Runtime database directory
+- Command deployment configuration
+
+Confirm that the following are NOT tracked:
+
+- azurion.sqlite
+- azurion.sqlite-shm
+- azurion.sqlite-wal
+- db.json
+- database backup snapshots
+
+Do not recreate or commit runtime database files.
+
+If the repository is already clean and correct, do not modify it.
+
+--------------------------------------------------
+## STEP 2 — SECRET CONFIGURATION
+--------------------------------------------------
+
+The bot requires these runtime secrets/configuration values:
+
+- DISCORD_BOT_TOKEN
+- DISCORD_CLIENT_ID
+- GROQ_API_KEY
+
+Potentially also:
+
+- DISCORD_GUILD_ID
+
+IMPORTANT SECURITY RULE:
+
+NEVER ask the operator to paste tokens into chat.
+NEVER print token values.
+NEVER write tokens into source files.
+NEVER write tokens into `.env` files that may be committed.
+NEVER include secrets in logs or test output.
+
+Instead, instruct the operator to add the values through the Replit Secrets/environment-variable interface.
+
+When configuration is required, stop and explicitly ask the operator to configure:
+
+DISCORD_BOT_TOKEN
+DISCORD_CLIENT_ID
+GROQ_API_KEY
+
+If instant guild command registration is desired, also ask for:
+
+DISCORD_GUILD_ID
+
+The operator should only confirm that the secrets have been configured.
+
+Do not request the actual secret values.
+
+--------------------------------------------------
+## STEP 3 — DISCORD PORTAL REQUIREMENTS
+--------------------------------------------------
+
+Before starting the bot, verify that the operator has configured the Discord application correctly.
+
+Confirm:
+
+- Bot user exists.
+- Bot token corresponds to the application.
+- Message Content Intent is enabled.
+- Server Members Intent is enabled if required by the current implementation.
+- Required bot permissions are available.
+- The bot has been invited to the intended test server.
+- The bot can access the channels required for testing.
+
+Do not assume permissions that have not been verified.
+
+If a required Discord portal setting is missing, report it clearly and wait for the operator to correct it.
+
+--------------------------------------------------
+## STEP 4 — DEPENDENCY AND BUILD VALIDATION
+--------------------------------------------------
+
+Before connecting to Discord:
+
+Run the existing project validation.
+
+At minimum:
+
+- Discord bot tests
+- Discord bot typecheck
+- Workspace typecheck
+- Formatting check for relevant files
+- git diff --check
+
+Do not modify unrelated legacy formatting.
+
+Expected result:
+
+All existing tests and typechecks pass.
+
+If something fails:
+
+1. Determine whether it is a pre-existing issue or deployment-related.
+2. Do not blindly rewrite code.
+3. Fix only issues necessary for successful deployment.
+4. Re-run the relevant validation.
+
+--------------------------------------------------
+## STEP 5 — FRESH DATABASE VALIDATION
+--------------------------------------------------
+
+Verify that the runtime database can initialize from a clean state.
+
+The first deployment must NOT inherit stale development conversation history or memory.
+
+Confirm:
+
+- Runtime database directory exists or can be created.
+- SQLite initializes successfully.
+- No historical snapshot is automatically imported.
+- No development conversation data appears in the fresh database.
+
+Do not commit the generated runtime database.
+
+--------------------------------------------------
+## STEP 6 — COMMAND DEPLOYMENT
+--------------------------------------------------
+
+Once secrets and Discord configuration are confirmed:
+
+Run the existing command deployment process:
+
+pnpm --filter @workspace/discord-bot run deploy
+
+Do not invent a new deployment command.
+
+Verify that command registration completes successfully.
+
+If DISCORD_GUILD_ID is configured, verify guild command registration behavior.
+
+If global registration is being used, clearly distinguish that from guild registration and account for Discord's propagation delay.
+
+--------------------------------------------------
+## STEP 7 — START THE BOT
+--------------------------------------------------
+
+Use the existing workflow:
+
+pnpm --filter @workspace/discord-bot run dev
+
+Do not change the workflow unless the current configuration is demonstrably broken.
+
+Monitor startup output.
+
+A successful startup should demonstrate that:
+
+- Required configuration is detected.
+- SQLite initializes.
+- Commands/events load.
+- Discord connection succeeds.
+- No immediate fatal exception occurs.
+- No credentials are printed.
+
+Do not expose token values in the report.
+
+--------------------------------------------------
+## STEP 8 — LIVE SMOKE TEST
+--------------------------------------------------
+
+After successful startup, perform controlled testing in the designated test server.
+
+Test the highest-value functionality first.
+
+### Core Discord tests
+
+1. `/talk`
+2. `/talk reset`
+3. Normal follow-up conversation
+4. Bot mention
+5. Configured bot channel behavior
+
+### AI tests
+
+6. `/suggest`
+7. `/suggest` with an image if supported
+8. `/edit`
+9. Memory extraction after a conversation
+10. A follow-up that should benefit from conversation context
+
+### Reliability tests
+
+11. Send multiple messages rapidly enough to exercise the conversation queue.
+12. Verify responses do not overwrite each other's conversation history.
+13. Verify an invalid/failed AI response does not create fake history.
+14. Verify a provider/configuration error produces a safe user-facing message.
+15. Verify persistence degradation does not expose database internals.
+
+### Discord behavior
+
+16. Verify embeds/responses render correctly.
+17. Verify messages remain within Discord's length constraints.
+18. Verify command permissions behave as expected.
+19. Verify automod/moderation functionality if included in the current release scope.
+
+Do not intentionally abuse external APIs or spam requests.
+
+Use a controlled test account/channel where possible.
+
+--------------------------------------------------
+## STEP 9 — MEMORY / CONTEXT VALIDATION
+--------------------------------------------------
+
+Perform a small realistic conversation test.
+
+Example structure:
+
+1. Tell the bot a harmless preference or fact.
+2. Ask an unrelated question.
+3. Later ask a question where that fact is relevant.
+4. Verify the bot uses the information naturally.
+5. Verify it does not mention databases, stored memories, memory extraction, or internal context.
+6. Verify irrelevant memories do not dominate unrelated questions.
+
+Also verify:
+
+- Recent conversation takes precedence over older conflicting memory.
+- Memory relevance behavior remains bounded.
+- No fake memory is created from invalid AI responses.
+
+Do not use sensitive personal information for testing.
+
+--------------------------------------------------
+## STEP 10 — FAILURE HANDLING
+--------------------------------------------------
+
+If live testing discovers a failure:
+
+Classify it before changing code.
+
+Categories:
+
+- configuration
+- Discord permissions
+- command registration
+- database initialization
+- network/provider
+- Groq
+- Pollinations
+- conversation concurrency
+- context/memory
+- response validation
+- Discord delivery
+- unrelated/pre-existing
+
+Only implement a fix if:
+
+1. The defect is real.
+2. It affects first-release functionality.
+3. The fix is small and directly related to deployment.
+4. It does not unnecessarily expand project scope.
+
+After every fix:
+
+- Run affected tests.
+- Run bot typecheck.
+- Run workspace typecheck when appropriate.
+- Re-run the failed live test.
+
+Do not start a new architectural phase because of a minor cosmetic issue.
+
+--------------------------------------------------
+## STEP 11 — RELEASE READINESS DECISION
+--------------------------------------------------
+
+At the end, provide one of exactly these statuses:
+
+### RELEASE PASS
+
+Use when:
+
+- Required secrets are configured.
+- Bot connects successfully.
+- Commands register.
+- Core AI functionality works.
+- Conversation flow works.
+- Memory/context behavior works.
+- No release-blocking errors remain.
+
+### RELEASE PASS WITH KNOWN LIMITATIONS
+
+Use when:
+
+- Core functionality works.
+- A non-critical limitation remains.
+- The limitation is documented and does not prevent first-server use.
+
+### RELEASE BLOCKED
+
+Use when:
+
+- Bot cannot connect.
+- Commands cannot register.
+- Core AI functionality is broken.
+- Required permissions/configuration cannot be established.
+- A release-blocking runtime defect remains.
+
+--------------------------------------------------
+## STEP 12 — FINAL REPORT
+--------------------------------------------------
+
+Return a concise deployment report containing:
+
+### Environment
+- Repository/revision
+- Runtime/platform
+- Workflow used
+
+### Configuration
+- Which required configuration items are present
+- NEVER include their values
+
+### Validation
+- Tests
+- Typechecks
+- Database initialization
+- Command deployment
+- Discord connection
+
+### Live Tests
+Use:
+
+PASS / FAIL / NOT TESTED
+
+for:
+
+- /talk
+- /talk reset
+- follow-up conversation
+- mentions
+- configured bot channel
+- /suggest
+- /edit
+- memory extraction
+- context relevance
+- concurrency
+- error handling
+- moderation/automod where applicable
+
+### Defects
+For every defect:
+
+- Symptom
+- Root cause
+- Fix
+- Verification
+
+### Final Status
+One of:
+
+RELEASE PASS
+RELEASE PASS WITH KNOWN LIMITATIONS
+RELEASE BLOCKED
+
+--------------------------------------------------
+## STRICT SCOPE RULES
+--------------------------------------------------
+
+This phase is NOT a redesign.
+
+Do NOT:
+
+- Replace SQLite.
+- Replace Groq.
+- Replace Discord.js.
+- Add a new AI model.
+- Add another memory architecture.
+- Add another retry layer.
+- Add another queue.
+- Rewrite prompts unnecessarily.
+- Add new dependencies without a demonstrated requirement.
+- Refactor unrelated code.
+- Change the database schema.
+- Change environment-variable names.
+- Commit runtime databases.
+- Commit secrets.
+- Start another feature phase.
+
+The purpose of this phase is to prove that the existing bot can actually run reliably in a real Discord server.
+
+If something is merely cosmetic, document it and continue.
+
+If something is release-blocking, fix it.
+
+If something requires architectural work beyond the scope above, stop and report it rather than expanding the phase.
+
+--------------------------------------------------
+## EXECUTION PRINCIPLE
+--------------------------------------------------
+
+Be authoritative and execution-oriented.
+
+Do not ask what to do next when the required next action is already defined above.
+
+Proceed through the checklist in order.
+
+The only expected operator interaction before live deployment is secure configuration of the required Replit Secrets and Discord Developer Portal settings.
+
+Never request the actual token values.
+
+Do not claim success without verification.
+
+Do not claim a live test was performed unless it was actually performed.
+
+The final goal is a working, first-release Discord bot—not another audit document.
