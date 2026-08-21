@@ -12,7 +12,7 @@ A fully modular Discord bot built with discord.js v14. Features slash commands, 
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
 - Discord: discord.js v14
-- LLM: Groq API (llama-3.3-70b-versatile for text, llama-4-scout for vision)
+- LLM: Groq API (openai/gpt-oss-120b for text, llama-4-scout for vision)
 - Image generation: Pollinations.ai (free, no key)
 - Search: DuckDuckGo HTML (free, no key)
 - DB: SQLite runtime database in `artifacts/discord-bot/data/` with async access and versioned startup migrations

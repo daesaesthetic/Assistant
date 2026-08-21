@@ -1,0 +1,378 @@
+# PHASE 1.6A — LIVE DEPLOYMENT FAILURE DIAGNOSIS
+
+The bot has now been deployed into the first real test environment.
+
+Observed behavior:
+
+1. Some Discord commands are not working.
+2. The bot detects messages/interactions and begins typing.
+3. In some conversation flows, the bot never sends the final response.
+4. The repository has already completed Phase 1.5F.
+5. B1–B5 reliability work and Phase 1.5A–1.5F are considered complete.
+6. Do NOT redesign the bot or begin another feature phase.
+
+This is now a focused RUNTIME DEBUGGING task.
+
+Your objective is to determine the exact cause of the live failures and fix only the defects required to make the existing release work.
+
+--------------------------------------------------
+## FIRST RULE
+--------------------------------------------------
+
+DO NOT GUESS.
+
+Do not immediately modify conversation logic, Groq reliability, memory behavior, prompts, or database architecture.
+
+First trace the actual failing runtime path.
+
+Use logs, command registration state, startup output, and the existing source code to identify where execution stops.
+
+--------------------------------------------------
+## 1. VERIFY STARTUP
+--------------------------------------------------
+
+Inspect the running Replit workflow and determine:
+
+- Did the Discord client successfully log in?
+- Did command/event loading complete?
+- Did SQLite initialize?
+- Did any startup exceptions occur?
+- Are there repeated reconnects?
+- Are there uncaught promise rejections?
+- Are there command registration errors?
+- Are there Groq configuration errors?
+
+Do not expose secret values.
+
+Report the exact relevant error messages/categories.
+
+--------------------------------------------------
+## 2. VERIFY DISCORD COMMAND REGISTRATION
+--------------------------------------------------
+
+Determine exactly which application commands Discord currently knows about.
+
+Compare:
+
+- Commands present in source
+- Commands loaded at startup
+- Commands sent by the deploy script
+- Commands visible to the test server
+- Whether registration is guild-specific or global
+
+Pay particular attention to:
+
+- DISCORD_CLIENT_ID
+- DISCORD_GUILD_ID, if configured
+- Command deployment script
+- Discord REST registration
+- Command names
+- Command permissions
+- Command type
+
+Determine whether the "some commands don't work" issue is:
+
+A. Command not registered
+B. Command registered but handler not loaded
+C. Handler executes but throws
+D. Handler executes but fails to respond
+E. Permission/configuration issue
+F. Something else
+
+Do not change registration architecture unless the existing implementation is actually incorrect.
+
+--------------------------------------------------
+## 3. TRACE THE "TYPING BUT NO MESSAGE" PATH
+--------------------------------------------------
+
+Trace one failing conversation from beginning to end.
+
+For automatic messages, inspect:
+
+messageCreate
+→ conversation detection
+→ generateReply()
+→ conversation queue
+→ context construction
+→ Groq request
+→ response validation
+→ persistence
+→ memory extraction launch
+→ caller
+→ Discord reply
+
+For `/talk`, inspect:
+
+interaction
+→ deferReply()
+→ generateReply()
+→ persistence
+→ editReply()/reply path
+
+Determine the exact stage where execution stops.
+
+IMPORTANT:
+
+The typing indicator alone does NOT prove Groq succeeded.
+
+Verify whether:
+
+- `createGroqCompletion()` returns
+- response validation succeeds
+- `generateReply()` returns
+- persistence succeeds or returns `persisted: false`
+- the caller reaches Discord response code
+- Discord accepts the response
+
+--------------------------------------------------
+## 4. CHECK B1 ERROR HANDLING
+--------------------------------------------------
+
+Verify that B1's shared Groq reliability boundary is still the only raw Groq request path.
+
+Do NOT create another retry or timeout layer.
+
+Determine whether the live failure is being classified as:
+
+- configuration
+- rate_limit
+- context
+- transient_provider
+- network
+- timeout
+- empty_response
+- malformed_response
+- unknown
+
+If an error is already being correctly classified, fix the caller only if it is failing to resolve the Discord interaction.
+
+Do not weaken the B1 reliability layer.
+
+--------------------------------------------------
+## 5. CHECK B2/B3 PERSISTENCE
+--------------------------------------------------
+
+Because this is a fresh deployment, verify the runtime database.
+
+Confirm:
+
+- SQLite exists
+- schema initializes
+- reads work
+- writes work
+- conversation persistence does not hang
+- the B2 queue releases
+- B3 `persisted` behavior is respected
+
+If Groq succeeds but persistence fails, the generated response should still be returned according to the B3 contract:
+
+{
+  text,
+  botName,
+  personaLabel?,
+  persisted: false
+}
+
+Do not revert B3.
+
+Do not modify the database schema unless a genuine schema/runtime defect is proven.
+
+--------------------------------------------------
+## 6. CHECK DISCORD RESPONSE COMPLETION
+--------------------------------------------------
+
+This is a high-priority investigation.
+
+For every failing interaction determine whether Discord is left in:
+
+- deferred
+- replied
+- acknowledged
+- expired
+- failed delivery
+
+Verify that every code path after `deferReply()` eventually:
+
+- edits the deferred reply,
+- sends a valid follow-up,
+- or safely handles the failure.
+
+Look specifically for:
+
+- missing `await`
+- thrown errors before `editReply`
+- errors inside error handlers
+- invalid embeds
+- empty response content
+- response length violations
+- attempting to reply twice
+- attempting `reply()` after `deferReply()` incorrectly
+- interaction token expiration
+- permission failures
+
+Do not regenerate AI responses when Discord delivery fails.
+
+--------------------------------------------------
+## 7. CHECK AUTOMATIC MESSAGE FLOW
+--------------------------------------------------
+
+For mention/bot-channel responses:
+
+Determine whether:
+
+- typing starts
+- `generateReply()` starts
+- `generateReply()` completes
+- response text exists
+- Discord `reply()` is called
+- Discord accepts the message
+
+Check whether the new B5 error handling accidentally makes a failure path silent.
+
+Do not remove the intended behavior where unprompted bot-channel failures remain quiet.
+
+--------------------------------------------------
+## 8. CHECK COMMANDS INDIVIDUALLY
+--------------------------------------------------
+
+Test at minimum:
+
+- `/talk`
+- `/talk reset`
+- `/suggest`
+- `/edit`
+
+For each command record:
+
+REGISTERED
+→ HANDLER LOADED
+→ HANDLER ENTERED
+→ EXTERNAL REQUEST
+→ RESULT
+→ DISCORD RESPONSE
+
+Do not assume that all command failures have the same cause.
+
+--------------------------------------------------
+## 9. LIVE TESTING
+--------------------------------------------------
+
+Use the smallest number of controlled requests necessary.
+
+Do not spam Discord, Groq, or Pollinations.
+
+Perform:
+
+1. One `/talk`
+2. One `/talk reset`
+3. One normal follow-up
+4. One mention
+5. One `/suggest`
+6. One `/edit`
+
+Stop and diagnose immediately when a failure is reproduced.
+
+--------------------------------------------------
+## 10. FIX POLICY
+--------------------------------------------------
+
+Only modify code when the root cause is established.
+
+Allowed:
+
+- Fixing a broken Discord response path
+- Fixing command registration
+- Fixing a deployment/runtime configuration mismatch
+- Fixing an actual exception discovered during live testing
+- Fixing a small integration defect between existing B1–B5 components
+
+Not allowed:
+
+- New AI architecture
+- New retry system
+- New queue
+- New memory architecture
+- Prompt redesign
+- Database redesign
+- Dependency replacement
+- Cosmetic refactoring
+- Unrelated cleanup
+
+Preserve all completed Phase 1.4B and 1.5 behavior.
+
+--------------------------------------------------
+## 11. VERIFICATION AFTER FIX
+--------------------------------------------------
+
+After any code change:
+
+Run:
+
+- Discord bot tests
+- Discord bot typecheck
+- Workspace typecheck when affected
+- Prettier check on changed files
+- git diff --check
+
+Then repeat the exact live test that previously failed.
+
+Do not claim the issue is fixed until the failed behavior is reproduced successfully after the change.
+
+--------------------------------------------------
+## 12. FINAL REPORT
+--------------------------------------------------
+
+Report:
+
+### Root Cause
+Exactly what caused the failure.
+
+### Affected Components
+Exact files/functions involved.
+
+### Fix
+What was changed and why.
+
+### Command Status
+
+| Command | Registration | Execution | Response |
+|---|---|---|---|
+| /talk | PASS/FAIL | PASS/FAIL | PASS/FAIL |
+| /talk reset | PASS/FAIL | PASS/FAIL | PASS/FAIL |
+| /suggest | PASS/FAIL | PASS/FAIL | PASS/FAIL |
+| /edit | PASS/FAIL | PASS/FAIL | PASS/FAIL |
+| mention | PASS/FAIL | PASS/FAIL | PASS/FAIL |
+
+### Validation
+- Tests
+- Typechecks
+- Formatting
+- git diff --check
+- Live tests
+
+### Final Status
+
+Use exactly one:
+
+LIVE TEST PASS
+LIVE TEST PASS WITH KNOWN LIMITATIONS
+LIVE TEST BLOCKED
+
+Do not mark PASS merely because the bot starts.
+
+The bot must actually respond to the relevant Discord interactions.
+
+--------------------------------------------------
+## FINAL AUTHORITY
+--------------------------------------------------
+
+The repository is already considered feature-complete enough for first release.
+
+Your job now is NOT to make the bot more sophisticated.
+
+Your job is to make the existing bot WORK.
+
+Find the actual runtime failure.
+Fix the smallest necessary thing.
+Verify it live.
+Stop when the first-release functionality works.
