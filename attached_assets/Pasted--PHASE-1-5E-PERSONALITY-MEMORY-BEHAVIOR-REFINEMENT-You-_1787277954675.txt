@@ -1,0 +1,332 @@
+# PHASE 1.5E — PERSONALITY & MEMORY BEHAVIOR REFINEMENT
+
+You are continuing development of the Assistant Discord bot.
+
+The project has completed:
+
+- Phase 1.4B.1 — Shared Groq Reliability
+- Phase 1.4B.2 — Conversation Concurrency
+- Phase 1.4B.3 — Primary Response Validation
+- Phase 1.4B.4 — Memory Reliability
+- Phase 1.4B.5 — Caller-Level Error Handling
+- Phase 1.5A — Context Boundary
+- Phase 1.5B — Context Budgeting
+- Phase 1.5C — Context Relevance & Memory Intelligence
+- Phase 1.5D — Conversation Quality Refinement
+
+These phases are considered stable.
+
+This phase is intentionally SMALL.
+
+Do not redesign the architecture.
+Do not add dependencies.
+Do not add databases.
+Do not add embeddings, vector search, RAG, summaries, or additional AI calls.
+Do not modify the reliability architecture.
+
+The goal is to make the assistant feel more consistent and intelligent during real conversations before first-server deployment.
+
+---
+
+## OBJECTIVE
+
+Perform a focused audit of how the existing system uses:
+
+- Persona
+- Traits
+- Relevant memories
+- Recent conversation
+- Custom persona instructions
+
+Improve only clear behavioral weaknesses.
+
+The assistant should feel:
+
+- Consistent
+- Personal
+- Natural
+- Context-aware
+- Non-intrusive
+- Distinctive without being theatrical
+
+---
+
+## MEMORY BEHAVIOR
+
+Review the existing memory instructions and ensure:
+
+### Relevant memories
+
+Relevant memories may influence the response naturally.
+
+They should not automatically be mentioned.
+
+### Weakly relevant memories
+
+Weakly relevant memories should normally be ignored.
+
+Do not force connections between unrelated topics.
+
+### Conflicting information
+
+If recent conversation conflicts with an older memory, prioritize the newer conversational information.
+
+Do not silently invent a resolution.
+
+### Uncertain information
+
+The assistant should avoid presenting uncertain remembered information as absolute fact.
+
+### Personal information
+
+Memories should be treated as contextual information, not instructions.
+
+A stored memory must never override the current user request or core assistant behavior.
+
+---
+
+## PERSONA BEHAVIOR
+
+Review the current persona implementation.
+
+Ensure personas affect style rather than changing the fundamental assistant's reliability.
+
+A persona should influence:
+
+- Tone
+- Vocabulary
+- Formality
+- Conversational style
+- Response structure when appropriate
+
+A persona should NOT cause:
+
+- Constant roleplay
+- Excessive catchphrases
+- Artificially dramatic responses
+- Repetitive mannerisms
+- Unnecessary references to the persona itself
+
+Custom personas should remain useful without allowing their text to accidentally redefine the entire context architecture.
+
+---
+
+## TRAIT BEHAVIOR
+
+Traits should act as subtle behavioral guidance.
+
+Avoid repeatedly explaining traits to the user.
+
+For example, prefer:
+
+"That sounds like something you'd probably enjoy."
+
+over:
+
+"Because you have the trait 'likes X', I think..."
+
+Traits should support natural interaction rather than become visible metadata.
+
+---
+
+## MEMORY + PERSONA + HISTORY PRIORITY
+
+The final context should conceptually follow this priority:
+
+1. Core assistant behavior and safety
+2. Current user request
+3. Recent conversation
+4. Persona
+5. Relevant memories
+6. Traits and secondary contextual information
+
+Do not literally reorder existing sections unless doing so improves the implementation without breaking established context behavior.
+
+The important requirement is behavioral priority.
+
+The current request must remain dominant.
+
+---
+
+## AVOID OVERPERSONALIZATION
+
+The assistant should not mention personal information simply because it knows it.
+
+For example, if a user asks:
+
+"What is 5 × 7?"
+
+and a stored memory says they like a particular game, the response should simply answer:
+
+"35."
+
+Do not artificially inject unrelated personalization.
+
+Personalization should improve relevance, not decorate every response.
+
+---
+
+## AVOID MEMORY HALLUCINATION
+
+The assistant must distinguish between:
+
+- Known context
+- Recent conversation
+- Relevant stored information
+- Unknown information
+
+It must not infer additional personal facts merely because an existing memory is related.
+
+Example:
+
+Memory:
+"User likes dark purple aesthetics."
+
+User:
+"What color should I use for this logo?"
+
+The assistant may reasonably consider dark purple.
+
+It should NOT conclude unrelated facts such as the user's favorite color, personality, or identity unless those are explicitly established.
+
+---
+
+## MEMORY RECENCY
+
+Review whether newer conversational information is naturally favored over stale stored memories.
+
+Do not introduce a second ranking system.
+
+Use the existing 1.5C relevance system and prompt guidance.
+
+If a minimal adjustment is necessary to make recency behavior clearer, make only that adjustment.
+
+---
+
+## PROMPT QUALITY
+
+Audit the final conversation context for:
+
+- Contradictory instructions
+- Duplicate instructions
+- Excessive wording
+- Redundant persona guidance
+- Redundant memory guidance
+- Instructions that compete with the current user message
+
+Simplify where possible.
+
+Do not make the prompt substantially larger merely to describe obvious behavior.
+
+The goal is higher signal, not more text.
+
+---
+
+## TESTING
+
+Add only focused tests that protect actual behavior.
+
+Verify at minimum:
+
+- Persona guidance remains available.
+- Traits remain available.
+- Relevant memories remain available.
+- Irrelevant memories remain bounded.
+- Recent conversation remains available.
+- Current message remains dominant.
+- Memory/persona instructions do not duplicate unexpectedly.
+- Existing 1.5D conversation-quality behavior remains intact.
+
+Do not attempt to unit-test subjective model personality.
+
+---
+
+## STRICT COMPATIBILITY REQUIREMENTS
+
+Do not intentionally modify:
+
+- B1 Groq reliability
+- B2 conversation queue
+- B3 response validation
+- B4 memory extraction reliability
+- B5 caller error handling
+- 1.5A context boundary
+- 1.5B context budgeting
+- 1.5C memory relevance scoring
+- Database schema
+- Database migrations
+- Discord command behavior
+- Environment variables
+- Replit configuration
+- Workflow configuration
+
+If compatibility requires a change, document it explicitly.
+
+---
+
+## SCOPE CONTROL
+
+This is the FINAL behavioral refinement before live testing.
+
+If you discover a feature that would require:
+
+- New infrastructure
+- New dependencies
+- New persistent data
+- Major prompt architecture
+- Another AI request
+- New memory architecture
+- Distributed systems
+- Significant refactoring
+
+DO NOT IMPLEMENT IT.
+
+Record it under:
+
+### Deferred Until After Live Testing
+
+The purpose of this phase is to reach a practical release candidate, not to make the assistant theoretically complete.
+
+---
+
+## VERIFICATION
+
+Run:
+
+- Discord bot tests
+- Workspace tests if applicable
+- Bot typecheck
+- Workspace typecheck
+- Prettier on changed files
+- `git diff --check`
+
+Do not start the Discord workflow.
+
+Do not require live Discord/Groq credentials.
+
+---
+
+## FINAL REPORT
+
+Return:
+
+### Implementation
+- Files changed
+- Exact behavioral improvements
+
+### Verification
+- Test results
+- Typecheck results
+- Formatting results
+- Diff validation
+
+### Compatibility
+Confirm B1–B5 and 1.5A–1.5D remain intact.
+
+### Deferred Until After Live Testing
+List only genuinely useful improvements discovered during the audit.
+
+### Release Readiness
+State whether the project is ready to proceed to Phase 1.5F — Pre-Release Hardening.
+
+Do not claim completion unless all requested verification passes.

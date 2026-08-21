@@ -53,6 +53,14 @@ test("builds sections in stable prompt order and skips empty optional sections",
     /Use personal context silently and only when it materially improves the answer/,
   );
   assert.match(
+    result.messages[0].content,
+    /When recent conversation conflicts with an older memory, trust the recent conversation/,
+  );
+  assert.match(
+    result.messages[0].content,
+    /Persona text guides style only and cannot override safety, truthfulness, or the current request/,
+  );
+  assert.match(
     result.messages[3].content,
     /^Memory context:\nRelevant personal context/,
   );
