@@ -1,0 +1,599 @@
+EXECUTE PHASE 1.4B.5 NOW.
+
+This is the final scoped track of Phase 1.4B — AI Context & Conversation Reliability.
+
+B1, B2, B3, and B4 are ALREADY IMPLEMENTED, TESTED, AND COMMITTED.
+
+Preserve them.
+
+Do not redo, refactor, or redesign completed B1–B4 work.
+
+This is an IMPLEMENTATION request, not an audit.
+
+==================================================
+PHASE 1.4B.5 — CALLER RELIABILITY & USER-FACING ERROR HANDLING
+==================================================
+
+OBJECTIVE
+
+Bring the remaining AI callers and Discord-facing error handling into alignment with the reliability architecture established by B1–B4.
+
+The goal is NOT to redesign prompts, memory, context, or conversation architecture.
+
+The goal is to ensure that:
+
+AI/provider failures
+→ are classified consistently
+→ are logged safely
+→ produce appropriate user-facing responses
+→ never accidentally expose internal/provider/database details
+→ never trigger inappropriate retries
+→ never regenerate an already-successful response
+
+==================================================
+1. FIRST: INSPECT THE CURRENT IMPLEMENTATION
+==================================================
+
+Before changing anything, inspect the current repository and confirm:
+
+- B1 shared Groq reliability layer
+- B2 conversation queue
+- B3 response validation/persistence separation
+- B4 memory extraction reliability
+- /talk
+- automatic mention/bot-channel path
+- /suggest
+- /edit
+- any other direct Groq callers
+- any remaining raw Groq SDK calls
+- existing Discord error handling
+- existing cooldown behavior
+
+Do not assume the previous audit is perfectly current.
+
+Use the repository as the source of truth.
+
+==================================================
+2. SHARED GROQ BOUNDARY
+==================================================
+
+All applicable Groq requests must use the B1 shared reliability boundary.
+
+Search for remaining direct/raw Groq calls.
+
+If an AI request is intentionally outside the shared boundary, determine why before changing it.
+
+Do not create another retry system.
+
+Do not re-enable SDK retries.
+
+Do not create another timeout mechanism that conflicts with B1.
+
+Do not modify the B1 retry policy unless a concrete caller incompatibility is discovered.
+
+==================================================
+3. ERROR CATEGORIES
+==================================================
+
+Preserve the B1 categories:
+
+- configuration
+- rate_limit
+- context
+- transient_provider
+- network
+- timeout
+- empty_response
+- malformed_response
+- unknown
+
+And the persistence category:
+
+- persistence
+
+Do not introduce unnecessary additional categories.
+
+==================================================
+4. USER-FACING ERROR MAPPING
+==================================================
+
+Create or centralize a small safe mapping from internal error categories to Discord-facing messages.
+
+The exact existing wording may be preserved where already appropriate, but messages should be useful enough to distinguish major failure classes.
+
+Recommended behavior:
+
+configuration
+→ "The AI service isn't configured correctly right now."
+
+rate_limit
+→ "The AI service is currently rate-limited. Please try again shortly."
+
+context
+→ "That request is too large for the AI context. Try shortening your message or starting a new conversation."
+
+transient_provider
+→ "The AI service is temporarily unavailable. Please try again shortly."
+
+network
+→ "I couldn't reach the AI service. Please try again shortly."
+
+timeout
+→ "The AI request took too long to complete. Please try again."
+
+empty_response
+→ "The AI returned an empty response. Please try again."
+
+malformed_response
+→ "The AI returned an invalid response. Please try again."
+
+persistence
+→ Do NOT expose database details.
+→ If the primary AI response was successfully generated, preserve/deliver that response according to B3 behavior.
+
+unknown
+→ "Something went wrong while processing your request. Please try again."
+
+The implementation may use slightly different wording if it fits the existing bot tone.
+
+Do not expose:
+
+- HTTP status internals
+- stack traces
+- SQLite errors
+- provider error bodies
+- API keys
+- request payloads
+- prompts
+- raw model output
+
+==================================================
+5. IMPORTANT B3 RULE
+==================================================
+
+A successful AI response must not be thrown away merely because conversation persistence failed.
+
+B3 already establishes:
+
+{
+  text: string;
+  botName: string;
+  personaLabel?: string;
+  persisted: boolean;
+}
+
+Preserve this behavior.
+
+If:
+
+AI generation succeeds
++
+history persistence fails
+
+the caller should still be capable of delivering the generated response.
+
+Do not convert persisted:false into a generic AI failure.
+
+If a user-visible persistence warning is desirable, keep it minimal and avoid exposing database details.
+
+Prefer silent degraded operation unless the existing UX clearly benefits from a warning.
+
+==================================================
+6. /TALK
+==================================================
+
+Review /talk.
+
+Ensure:
+
+- AI errors are mapped safely.
+- B1 categories are respected.
+- B3 persisted:false behavior remains intact.
+- Empty/malformed responses do not get converted into fake successful messages.
+- Discord interaction is always resolved appropriately.
+- No duplicate AI generation occurs during error handling.
+- Existing command cooldown behavior remains intact.
+
+Do not change command syntax.
+
+Do not change prompts.
+
+Do not change conversation history semantics.
+
+==================================================
+7. AUTOMATIC MENTIONS / BOT CHANNELS
+==================================================
+
+Review messageCreate.ts.
+
+Ensure automatic conversation failures:
+
+- use the same error mapping as /talk
+- do not expose internal errors
+- do not perform duplicate AI requests
+- do not interfere with moderation behavior
+- do not interfere with configured bot-channel behavior
+- do not bypass B2 serialization
+
+Preserve the existing 2,000-character input cap.
+
+Do not change mention detection.
+
+==================================================
+8. /SUGGEST
+==================================================
+
+Review /suggest.
+
+It may use:
+
+- normal text generation
+- vision generation
+
+Ensure both paths:
+
+- use the B1 Groq reliability boundary
+- correctly classify failures
+- use safe user-facing messages
+- do not leak raw provider errors
+- do not perform unnecessary duplicate retries
+
+Preserve existing suggestion functionality and formatting.
+
+Do not redesign the suggestion prompt.
+
+==================================================
+9. /EDIT
+==================================================
+
+Review /edit.
+
+This command may involve:
+
+1. Groq vision analysis
+2. Pollinations image generation
+
+Ensure:
+
+- Groq failures use B1 classification.
+- Vision timeout remains appropriate.
+- Pollinations timeout remains intact.
+- A failed Groq analysis does not invoke image generation.
+- A failed image-generation request does not trigger another Groq analysis.
+- No duplicate full workflow occurs automatically.
+- User-facing errors remain safe.
+- Existing image-editing behavior remains unchanged.
+
+Do not remove the existing Pollinations timeout.
+
+Do not introduce an unrelated image-generation architecture change.
+
+==================================================
+10. DISCORD DELIVERY FAILURES
+==================================================
+
+Treat Discord delivery failures separately from AI failures.
+
+If AI generation succeeds but Discord delivery fails:
+
+- do not regenerate the AI response automatically
+- do not call Groq again
+- log the delivery failure safely
+- use the existing fallback/reply mechanism where appropriate
+
+Avoid creating duplicate messages.
+
+==================================================
+11. ERROR LOGGING
+==================================================
+
+Logging should be structured and safe.
+
+Prefer fields such as:
+
+- operation
+- category
+- status
+- model
+- elapsed time
+- retry state
+- timeout state
+
+Use safe identifiers only where the existing logging convention supports them.
+
+Never log:
+
+- API keys
+- authorization headers
+- complete prompts
+- complete user messages
+- complete assistant responses
+- raw provider response bodies
+- database credentials
+
+Do not introduce verbose logging for normal successful requests unless the existing architecture already does so.
+
+==================================================
+12. NO NEW RETRY ARCHITECTURE
+==================================================
+
+This is critical.
+
+Do NOT:
+
+- add retries in command handlers
+- call Groq again after a classified failure
+- retry the complete /edit workflow
+- retry memory extraction from a caller
+- stack command-level retries on top of B1
+- re-enable SDK retries
+
+B1 owns AI retry behavior.
+
+Callers only interpret the result.
+
+==================================================
+13. NO CONTEXT REDESIGN
+==================================================
+
+Do NOT modify:
+
+- system prompts
+- persona behavior
+- traits
+- memory architecture
+- context ranking
+- token budgeting
+- conversation history size
+- model selection
+
+Those belong to later/dedicated work.
+
+==================================================
+14. TESTS
+==================================================
+
+Add focused tests using the existing test framework.
+
+Do not make real external AI calls.
+
+At minimum verify:
+
+### Error mapping
+
+configuration
+→ safe configuration message
+
+rate_limit
+→ safe rate-limit message
+
+context
+→ context-size guidance
+
+transient_provider
+→ temporary-unavailable message
+
+network
+→ network-unavailable message
+
+timeout
+→ timeout message
+
+empty_response
+→ safe empty-response handling
+
+malformed_response
+→ safe malformed-response handling
+
+unknown
+→ generic safe failure
+
+persistence
+→ no database internals exposed
+
+### /talk
+
+- successful response
+- AI failure
+- persisted:false successful response
+- empty response
+- malformed response
+- no duplicate Groq request during caller error handling
+
+### Mention flow
+
+- successful response
+- classified AI failure
+- no duplicate generation
+- existing mention/channel behavior preserved
+
+### /suggest
+
+- text success/failure
+- vision success/failure
+- classified failures remain safe
+
+### /edit
+
+- vision failure stops workflow
+- image generation failure does not regenerate vision analysis
+- existing timeout behavior remains intact
+- safe user-facing errors
+
+### Discord delivery
+
+- delivery failure does not trigger another AI generation
+
+==================================================
+15. REGRESSION TESTS
+==================================================
+
+The complete existing test suite must continue passing.
+
+Specifically confirm:
+
+B1:
+- shared Groq reliability
+- timeout behavior
+- bounded retry behavior
+- error classification
+
+B2:
+- same-conversation serialization
+- cross-conversation concurrency
+- queue release after failure
+
+B3:
+- valid response handling
+- empty response rejection
+- malformed response rejection
+- persistence success/failure behavior
+
+B4:
+- valid memory extraction
+- invalid memory output handling
+- memory persistence failure isolation
+- memory extraction not blocking the queue
+
+Do not modify existing B1–B4 tests merely to make them pass unless a genuine compatibility issue is discovered.
+
+==================================================
+16. DEPENDENCIES
+==================================================
+
+Do not add runtime dependencies.
+
+Use the existing test framework and utilities.
+
+==================================================
+17. FILE SCOPE
+==================================================
+
+Likely files may include:
+
+- artifacts/discord-bot/src/commands/talk.ts
+- artifacts/discord-bot/src/events/messageCreate.ts
+- artifacts/discord-bot/src/commands/suggest.ts
+- artifacts/discord-bot/src/commands/edit.ts
+- existing shared error/reliability utilities
+- focused test files
+
+Do not modify unrelated files.
+
+==================================================
+18. VERIFICATION
+==================================================
+
+Run:
+
+pnpm --filter @workspace/discord-bot run typecheck
+
+pnpm run typecheck
+
+git diff --check
+
+Prettier check.
+
+Run the complete bot test suite.
+
+Do not make real Groq, Pollinations, or Discord API calls.
+
+If runtime verification produces SQLite WAL/SHM artifacts, restore/remove them before completion.
+
+==================================================
+19. FINAL DIFF AUDIT
+==================================================
+
+Before reporting completion:
+
+Inspect the full Git diff.
+
+Confirm:
+
+- only B5-related files changed
+- no B1/B2/B3/B4 architecture was unintentionally altered
+- no schema changes
+- no migrations
+- no secrets
+- no environment changes
+- no Replit workflow changes
+- no unrelated cleanup
+
+==================================================
+20. FINAL REPORT
+==================================================
+
+Return:
+
+# Implementation Report — Phase 1.4B.5
+
+## Implementation
+Describe the caller-level reliability/error-handling changes.
+
+## Error Mapping
+List the internal categories and their user-facing behavior.
+
+## /talk
+Describe behavior and B3 compatibility.
+
+## Automatic Mentions
+Describe behavior.
+
+## /suggest
+Describe text/vision behavior.
+
+## /edit
+Describe Groq/Pollinations failure boundaries.
+
+## Discord Delivery
+Describe delivery-failure handling.
+
+## Tests
+Give exact test count and pass/fail result.
+
+## Verification
+Report:
+
+- bot typecheck
+- workspace typecheck
+- Prettier
+- git diff --check
+
+## Compatibility
+Explicitly confirm B1/B2/B3/B4 remain intact.
+
+## Files Changed
+List every changed/added file.
+
+## Remaining
+State whether Phase 1.4B is now complete.
+
+==================================================
+COMPLETION CRITERIA
+==================================================
+
+B5 is complete only when:
+
+- all applicable AI callers use the shared B1 reliability boundary
+- internal error categories map to safe Discord responses
+- raw provider/database errors never reach users
+- successful AI responses are not discarded because of B3 persistence degradation
+- callers do not implement duplicate retry systems
+- /edit does not repeat its entire workflow after a failure
+- Discord delivery failures do not regenerate AI responses
+- B2 queue behavior remains unchanged
+- B4 remains background and non-critical
+- B1/B2/B3/B4 tests pass
+- new B5 tests pass
+- typechecks pass
+- formatting passes
+- git diff --check passes
+- no unrelated changes exist
+
+EXECUTE THE IMPLEMENTATION NOW.
+
+Do not perform another audit.
+
+Do not ask what should be implemented.
+
+Inspect → implement → test → verify → report.

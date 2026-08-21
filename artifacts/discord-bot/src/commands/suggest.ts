@@ -1,11 +1,15 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import {
   createGroqCompletion,
-  getGroqErrorLogContext,
   TEXT_MODEL,
   VISION_MODEL,
 } from "../utils/groq.js";
 import { createEmbed, createErrorEmbed } from "../utils/embeds.js";
+import {
+  getAiUserFacingMessage,
+  getSafeAiErrorLogContext,
+  validateCompletionText,
+} from "../utils/ai-errors.js";
 import type { Command } from "../types.js";
 
 export default {
@@ -26,7 +30,15 @@ export default {
     ),
   cooldown: 10,
   async execute(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply();
+    try {
+      await interaction.deferReply();
+    } catch {
+      console.error("[/suggest]", {
+        operation: "discord_delivery",
+        category: "delivery",
+      });
+      return;
+    }
 
     const query = interaction.options.getString("query", true);
     const image = interaction.options.getAttachment("image");
@@ -65,21 +77,35 @@ export default {
         { requestType: image ? "vision" : "text" },
       );
 
-      const response =
-        completion.choices[0]?.message?.content ??
-        "No suggestions could be generated.";
+      const response = validateCompletionText(
+        completion,
+        image ? "vision" : "text",
+        image ? VISION_MODEL : TEXT_MODEL,
+      );
 
       const embed = createEmbed("Suggestions", response.slice(0, 4096));
       if (image) embed.setThumbnail(image.url);
 
-      await interaction.editReply({ embeds: [embed] });
+      try {
+        await interaction.editReply({ embeds: [embed] });
+      } catch {
+        console.error("[/suggest]", {
+          operation: "discord_delivery",
+          category: "delivery",
+        });
+      }
     } catch (err) {
-      console.error("[/suggest]", getGroqErrorLogContext(err));
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed("Failed to generate suggestions. Please try again."),
-        ],
-      });
+      console.error("[/suggest]", getSafeAiErrorLogContext("/suggest", err));
+      try {
+        await interaction.editReply({
+          embeds: [createErrorEmbed(getAiUserFacingMessage(err))],
+        });
+      } catch {
+        console.error("[/suggest]", {
+          operation: "discord_delivery",
+          category: "delivery",
+        });
+      }
     }
   },
 } satisfies Command;

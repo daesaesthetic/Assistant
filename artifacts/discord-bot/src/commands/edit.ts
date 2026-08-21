@@ -3,12 +3,13 @@ import {
   ChatInputCommandInteraction,
   AttachmentBuilder,
 } from "discord.js";
-import {
-  createGroqCompletion,
-  getGroqErrorLogContext,
-  VISION_MODEL,
-} from "../utils/groq.js";
+import { createGroqCompletion, VISION_MODEL } from "../utils/groq.js";
 import { createEmbed, createErrorEmbed } from "../utils/embeds.js";
+import {
+  getAiUserFacingMessage,
+  getSafeAiErrorLogContext,
+  validateCompletionText,
+} from "../utils/ai-errors.js";
 import type { Command } from "../types.js";
 
 export default {
@@ -31,7 +32,15 @@ export default {
     ),
   cooldown: 30,
   async execute(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply();
+    try {
+      await interaction.deferReply();
+    } catch {
+      console.error("[/edit]", {
+        operation: "discord_delivery",
+        category: "delivery",
+      });
+      return;
+    }
 
     const image = interaction.options.getAttachment("image", true);
     const instructions = interaction.options.getString("instructions", true);
@@ -59,7 +68,11 @@ export default {
         { requestType: "vision" },
       );
 
-      const imageDescription = analysis.choices[0]?.message?.content ?? "";
+      const imageDescription = validateCompletionText(
+        analysis,
+        "vision",
+        VISION_MODEL,
+      );
 
       // Step 2: Build a combined generation prompt
       const generationPrompt = [
@@ -88,16 +101,26 @@ export default {
         .setImage("attachment://edited.png")
         .setFooter({ text: "Image generation · Results may vary" });
 
-      await interaction.editReply({ embeds: [embed], files: [attachment] });
+      try {
+        await interaction.editReply({ embeds: [embed], files: [attachment] });
+      } catch {
+        console.error("[/edit]", {
+          operation: "discord_delivery",
+          category: "delivery",
+        });
+      }
     } catch (err) {
-      console.error("[/edit]", getGroqErrorLogContext(err));
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed(
-            "Image editing failed. Try a different image or simpler instructions.",
-          ),
-        ],
-      });
+      console.error("[/edit]", getSafeAiErrorLogContext("/edit", err));
+      try {
+        await interaction.editReply({
+          embeds: [createErrorEmbed(getAiUserFacingMessage(err))],
+        });
+      } catch {
+        console.error("[/edit]", {
+          operation: "discord_delivery",
+          category: "delivery",
+        });
+      }
     }
   },
 } satisfies Command;

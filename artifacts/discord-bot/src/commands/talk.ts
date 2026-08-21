@@ -1,7 +1,10 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../utils/embeds.js";
 import { generateReply } from "../utils/conversation.js";
-import { getGroqErrorLogContext } from "../utils/groq.js";
+import {
+  getAiUserFacingMessage,
+  getSafeAiErrorLogContext,
+} from "../utils/ai-errors.js";
 import type { Command } from "../types.js";
 
 export default {
@@ -21,36 +24,58 @@ export default {
     ),
   cooldown: 5,
   async execute(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply();
+    try {
+      await interaction.deferReply();
+    } catch {
+      console.error("[/talk]", {
+        operation: "discord_delivery",
+        category: "delivery",
+      });
+      return;
+    }
 
     const content = interaction.options.getString("message", true);
     const reset = interaction.options.getBoolean("reset") ?? false;
     const userId = interaction.user.id;
     const guildId = interaction.guildId ?? "dm";
 
+    let result: Awaited<ReturnType<typeof generateReply>>;
     try {
-      const { text, botName, personaLabel } = await generateReply({
+      result = await generateReply({
         userId,
         guildId,
         content,
         resetHistory: reset,
       });
-
-      const embed = createEmbed(botName, text.slice(0, 4096));
-
-      if (reset) {
-        embed.setFooter({ text: "Conversation history cleared." });
-      } else if (personaLabel) {
-        embed.setFooter({ text: `Persona: ${personaLabel}` });
-      }
-
-      await interaction.editReply({ embeds: [embed] });
     } catch (err) {
-      console.error("[/talk]", getGroqErrorLogContext(err));
-      await interaction.editReply({
-        embeds: [
-          createErrorEmbed("Failed to process your message. Please try again."),
-        ],
+      console.error("[/talk]", getSafeAiErrorLogContext("/talk", err));
+      try {
+        await interaction.editReply({
+          embeds: [createErrorEmbed(getAiUserFacingMessage(err))],
+        });
+      } catch {
+        console.error("[/talk]", {
+          operation: "discord_delivery",
+          category: "delivery",
+        });
+      }
+      return;
+    }
+
+    const embed = createEmbed(result.botName, result.text.slice(0, 4096));
+
+    if (reset) {
+      embed.setFooter({ text: "Conversation history cleared." });
+    } else if (result.personaLabel) {
+      embed.setFooter({ text: `Persona: ${result.personaLabel}` });
+    }
+
+    try {
+      await interaction.editReply({ embeds: [embed] });
+    } catch {
+      console.error("[/talk]", {
+        operation: "discord_delivery",
+        category: "delivery",
       });
     }
   },

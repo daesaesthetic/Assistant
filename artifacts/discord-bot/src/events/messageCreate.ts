@@ -2,7 +2,10 @@ import { Events, Message, TextChannel } from "discord.js";
 import { db } from "../database/index.js";
 import { createEmbed } from "../utils/embeds.js";
 import { generateReply } from "../utils/conversation.js";
-import { getGroqErrorLogContext } from "../utils/groq.js";
+import {
+  getAiUserFacingMessage,
+  getSafeAiErrorLogContext,
+} from "../utils/ai-errors.js";
 import type { Event } from "../types.js";
 
 // Spam detection: track recent message timestamps per user per guild
@@ -154,34 +157,46 @@ export default {
     // Show typing indicator while processing
     await (message.channel as TextChannel).sendTyping().catch(() => {});
 
+    let result: Awaited<ReturnType<typeof generateReply>>;
     try {
-      const { text, botName, personaLabel } = await generateReply({
+      result = await generateReply({
         userId,
         guildId,
         content,
       });
-
-      const embed = createEmbed(botName, text.slice(0, 4096));
-      if (personaLabel) {
-        embed.setFooter({ text: `Persona: ${personaLabel}` });
-      }
-
-      await message.reply({ embeds: [embed] });
     } catch (err) {
       console.error(
         "[messageCreate:conversation]",
-        getGroqErrorLogContext(err),
+        getSafeAiErrorLogContext("conversation", err),
       );
       // Don't send an error embed for unprompted bot-channel messages — too noisy
       if (mentioned) {
-        await message
-          .reply({
-            embeds: [
-              createEmbed("—", "Something went wrong. Try again in a moment."),
-            ],
-          })
-          .catch(() => {});
+        try {
+          await message.reply({
+            embeds: [createEmbed("—", getAiUserFacingMessage(err))],
+          });
+        } catch {
+          console.error("[messageCreate:conversation]", {
+            operation: "discord_delivery",
+            category: "delivery",
+          });
+        }
       }
+      return;
+    }
+
+    const embed = createEmbed(result.botName, result.text.slice(0, 4096));
+    if (result.personaLabel) {
+      embed.setFooter({ text: `Persona: ${result.personaLabel}` });
+    }
+
+    try {
+      await message.reply({ embeds: [embed] });
+    } catch {
+      console.error("[messageCreate:conversation]", {
+        operation: "discord_delivery",
+        category: "delivery",
+      });
     }
   },
 } satisfies Event;

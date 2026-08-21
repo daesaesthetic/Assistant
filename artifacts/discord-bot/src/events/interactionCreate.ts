@@ -1,6 +1,10 @@
 import { Events, Interaction } from "discord.js";
 import { checkCooldown, setCooldown } from "../utils/cooldown.js";
 import { createErrorEmbed } from "../utils/embeds.js";
+import {
+  getAiUserFacingMessage,
+  getSafeAiErrorLogContext,
+} from "../utils/ai-errors.js";
 import type { Event, ExtendedClient } from "../types.js";
 
 export default {
@@ -14,7 +18,11 @@ export default {
 
     if (!command) {
       await interaction.reply({
-        embeds: [createErrorEmbed("That command doesn't exist or hasn't been registered.")],
+        embeds: [
+          createErrorEmbed(
+            "That command doesn't exist or hasn't been registered.",
+          ),
+        ],
         ephemeral: true,
       });
       return;
@@ -25,13 +33,13 @@ export default {
       const remaining = checkCooldown(
         interaction.user.id,
         interaction.commandName,
-        command.cooldown
+        command.cooldown,
       );
       if (remaining > 0) {
         await interaction.reply({
           embeds: [
             createErrorEmbed(
-              `This command is on cooldown. Try again in **${remaining.toFixed(1)}s**.`
+              `This command is on cooldown. Try again in **${remaining.toFixed(1)}s**.`,
             ),
           ],
           ephemeral: true,
@@ -44,14 +52,27 @@ export default {
     try {
       await command.execute(interaction);
     } catch (err) {
-      console.error(`[Azurion] Error in /${interaction.commandName}:`, err);
-      const errorEmbed = createErrorEmbed(
-        "Something went wrong while executing that command."
+      console.error(
+        `[Azurion] Error in /${interaction.commandName}`,
+        getSafeAiErrorLogContext(`/${interaction.commandName}`, err),
       );
+      const errorEmbed = createErrorEmbed(getAiUserFacingMessage(err));
       if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({ embeds: [errorEmbed] });
+        await interaction.editReply({ embeds: [errorEmbed] }).catch(() => {
+          console.error("[interactionCreate]", {
+            operation: "discord_delivery",
+            category: "delivery",
+          });
+        });
       } else {
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        await interaction
+          .reply({ embeds: [errorEmbed], ephemeral: true })
+          .catch(() => {
+            console.error("[interactionCreate]", {
+              operation: "discord_delivery",
+              category: "delivery",
+            });
+          });
       }
     }
   },
