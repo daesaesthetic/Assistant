@@ -1,0 +1,303 @@
+# PHASE 1.5C — CONTEXT RELEVANCE & MEMORY INTELLIGENCE
+
+You are continuing the Assistant project from the current committed repository.
+
+The repository is authoritative.
+
+Phase 1.4B is COMPLETE.
+Phase 1.5A is COMPLETE.
+Phase 1.5B is COMPLETE.
+
+Do not redesign those phases.
+
+## OBJECTIVE
+
+Improve the quality of conversation context by introducing deterministic relevance handling for optional user context, beginning with stored memories.
+
+The goal is NOT to increase the context window.
+
+The goal is to make the assistant select the most useful existing context before sending it to the model.
+
+Current context construction already provides bounded sections and prioritizes recent conversation history. Preserve that architecture.
+
+## CURRENT ARCHITECTURE
+
+The primary conversation path is:
+
+`generateReply()`
+→ load bot name/persona/memories/traits/history
+→ `buildConversationContext()`
+→ `validateConversationContext()`
+→ `createGroqCompletion()`
+
+`conversation-context.ts` is the authoritative primary context builder.
+
+It currently provides:
+
+- Stable instructions.
+- Persona.
+- Traits.
+- Memories.
+- Recent history.
+- Current message.
+- Token estimation.
+- Section budgets.
+- Context truncation metadata.
+- Final context validation.
+
+Do not create a second context builder.
+
+## REQUIRED SCOPE
+
+### 1. Add memory relevance selection
+
+Before memories are assembled into the final prompt, determine which stored memories are most relevant to the current user message.
+
+The selection must be:
+
+- Deterministic.
+- Local.
+- Fast.
+- Explainable.
+- Bounded.
+- Free of additional AI/provider requests.
+
+Do NOT call Groq to rank memories.
+
+Do NOT introduce embeddings, vector databases, or new external services.
+
+### 2. Preserve important memories
+
+Relevance filtering must not simply discard memories because they do not share exact words with the current request.
+
+The implementation should account for useful semantic-ish relationships using lightweight deterministic techniques appropriate for the current project.
+
+If a reliable relevance strategy cannot be implemented without inventing semantics, STOP and report the limitation instead of pretending that keyword matching is semantic understanding.
+
+### 3. Preserve current context guarantees
+
+The existing priority model remains authoritative:
+
+1. Current user message
+2. Stable assistant instructions
+3. Recent conversation
+4. Persona
+5. Traits
+6. Relevant memories
+
+Do not allow memory relevance logic to displace the current message or recent conversation.
+
+### 4. Keep memory storage unchanged
+
+Do NOT modify:
+
+- Database schema.
+- Memory tables.
+- Memory extraction.
+- Memory uniqueness rules.
+- Existing 30-memory limit.
+- Memory persistence behavior.
+
+This phase is about READ-TIME SELECTION, not memory storage.
+
+### 5. Preserve fallback behavior
+
+If relevance scoring cannot identify useful memories:
+
+- Do not fail the conversation.
+- Fall back to the existing bounded memory behavior.
+- The primary AI request must remain functional.
+
+An empty memory collection must remain valid.
+
+### 6. Keep context construction pure
+
+The relevance calculation must not mutate:
+
+- Stored memories.
+- Conversation history.
+- Persona.
+- Traits.
+- Current user input.
+
+The context builder must remain a pure request-construction boundary.
+
+### 7. Add safe metadata
+
+Expose enough metadata to test/diagnose relevance behavior without logging user content.
+
+Possible metadata:
+
+- Total memories considered.
+- Memories selected.
+- Whether memory selection reduced the set.
+- Whether the memory section was truncated.
+
+Do NOT log:
+
+- Memory text.
+- User messages.
+- Conversation history.
+- Prompts.
+- AI responses.
+
+Do not add noisy logs for every normal request unless necessary.
+
+## IMPORTANT DESIGN CONSTRAINT
+
+Do not over-engineer this phase.
+
+Do NOT add:
+
+- Vector databases.
+- Embedding APIs.
+- New AI calls.
+- New runtime dependencies unless absolutely necessary.
+- Background indexing systems.
+- Database migrations.
+- Semantic search infrastructure.
+
+A lightweight deterministic relevance layer is the intended scope.
+
+## CONTEXT BUDGET COMPATIBILITY
+
+The existing memory allocation remains in effect.
+
+Relevance selection happens BEFORE final memory formatting/bounding.
+
+The final context must still pass:
+
+`validateConversationContext()`
+
+The existing:
+
+- 12,000-token planning budget.
+- 800-token output reservation.
+- Current-message preservation.
+- History selection.
+- Section budgets.
+
+must remain intact.
+
+Do not increase the context budget to compensate for poor relevance.
+
+## TESTING
+
+Add focused tests for:
+
+### Relevance
+
+- Relevant memory is selected.
+- Clearly irrelevant memory is deprioritized.
+- Multiple relevant memories retain deterministic ordering.
+- No memories produces a valid result.
+- All memories being relevant does not break existing behavior.
+
+### Safety
+
+- Current message is never modified.
+- History remains unchanged.
+- Memory input remains unchanged.
+- No memory-selection failure breaks context construction.
+
+### Budget interaction
+
+- Selected memories still obey the existing memory allocation.
+- Large memory sets remain bounded.
+- Context validation continues to pass.
+- Oversized current messages still preserve the current message.
+
+### Regression
+
+All existing Phase 1.4B and 1.5A/1.5B tests must continue passing.
+
+## STRICT BOUNDARIES
+
+Do NOT modify:
+
+- B1 Groq reliability.
+- B2 conversation locking.
+- B3 response validation.
+- B4 memory extraction.
+- B5 caller error handling.
+- Database schema.
+- Database migrations.
+- Persona architecture.
+- Trait architecture.
+- Discord command semantics.
+- Replit configuration.
+- Secrets.
+- Environment variables.
+- Groq retry/timeout behavior.
+- System prompt personality/tone.
+
+Do not redesign `generateReply()` unless required solely to pass the selected-memory context into the existing context builder.
+
+## STOP CONDITIONS
+
+STOP instead of guessing if:
+
+- A meaningful relevance system requires an AI request.
+- The repository lacks enough information to safely distinguish relevance.
+- Database changes appear necessary.
+- Existing context guarantees would need to change.
+- The implementation would require changing memory extraction semantics.
+- The proposed approach would create significant latency or per-message external work.
+
+Do not invent behavior simply to complete the phase.
+
+## VERIFICATION
+
+Run:
+
+- Complete Discord bot test suite.
+- New relevance tests.
+- Bot typecheck.
+- Workspace typecheck.
+- Prettier on modified files.
+- `git diff --check`.
+
+Confirm that the final diff is limited to Phase 1.5C.
+
+Do not perform external Groq/Discord calls merely to claim runtime success.
+
+If required Discord credentials are unavailable, report that only as a runtime limitation.
+
+## REQUIRED FINAL REPORT
+
+Return only:
+
+### Phase 1.5C — Implementation Report
+
+**Implemented**
+- Actual changes.
+
+**Relevance strategy**
+- Brief description of the deterministic selection method actually implemented.
+
+**Files changed**
+- Exact paths.
+
+**Tests**
+- Total passed/failed.
+
+**Verification**
+- Bot typecheck.
+- Workspace typecheck.
+- Formatting.
+- `git diff --check`.
+
+**Compatibility**
+- B1–B5.
+- 1.5A.
+- 1.5B.
+
+**Runtime limitations**
+- Actual limitations only.
+
+**Remaining**
+- Next phase if clearly established.
+
+Do not claim tests or verification that were not actually performed.
+
+Phase completion requires implementation, tests, and regression verification to pass.
