@@ -1,0 +1,708 @@
+# EXECUTE NOW — Phase 1.4B.3 Empty Response & Persistence Reliability
+
+This is an **ACTIVE IMPLEMENTATION REQUEST**.
+
+You are authorized to modify the current Assistant-Beta-2.5 repository.
+
+Do NOT treat this as a review request, planning request, setup request, or reference-only document.
+
+**Inspect → implement → test → verify → report.**
+
+The repository already contains completed and committed:
+
+* Phase 1.4B.1 — Shared Groq Reliability Layer
+* Phase 1.4B.2 — Conversation Reliability & Concurrency
+
+Do not redo either phase.
+
+---
+
+# OBJECTIVE
+
+Implement:
+
+> **Phase 1.4B.3 — Empty Response & Persistence Reliability**
+
+The goal is to ensure that:
+
+1. Empty or invalid AI responses are never treated as legitimate assistant messages.
+2. Fake placeholder responses such as `"..."` are no longer persisted.
+3. Successful AI generation is distinguished from conversation-history persistence failure.
+4. Persistence failures do not incorrectly masquerade as AI-generation failures.
+5. The B2 conversation queue remains safe through every success/failure path.
+6. Existing functionality remains intact outside this scope.
+
+---
+
+# FIRST: INSPECT THE CURRENT REPOSITORY
+
+Before editing, inspect the actual current implementation.
+
+Verify:
+
+* B1 shared Groq reliability implementation
+* B2 conversation lock/queue implementation
+* `conversation.ts`
+* `conversation-store.ts`
+* relevant database conversation methods
+* `/talk`
+* `messageCreate.ts`
+* memory extraction code
+* existing tests
+* current Git status
+
+The repository is the source of truth.
+
+Do not assume the previous agent's implementation from memory.
+
+---
+
+# B1 AND B2 ARE COMPLETE
+
+Preserve them.
+
+### B1
+
+The existing shared Groq reliability layer includes:
+
+* centralized Groq requests
+* explicit timeouts
+* application-owned retries
+* disabled SDK retries
+* rate-limit handling
+* typed AI error categories
+* safe structured logging
+
+Do not redesign it.
+
+### B2
+
+The existing conversation queue serializes:
+
+```text
+read history
+→ build context
+→ generate AI response
+→ persist history
+```
+
+for each `(userId, guildId)`.
+
+Do not replace the queue.
+
+Do not move persistence outside the protected conversation workflow unless required to correctly implement B3.
+
+Do not introduce a global lock.
+
+---
+
+# PART 1 — REMOVE FAKE EMPTY RESPONSES
+
+Find the current behavior where an empty Groq response becomes:
+
+```text
+"..."
+```
+
+or an equivalent placeholder.
+
+This behavior must be removed from the primary conversation path.
+
+An empty response must NOT be:
+
+* persisted as an assistant message
+* added to conversation history
+* sent to memory extraction as if it were a real response
+
+---
+
+# VALID RESPONSE DEFINITION
+
+A primary AI response should only be considered valid if it contains usable textual content.
+
+At minimum:
+
+* response exists
+* expected message content exists
+* content is a string
+* content remains non-empty after trimming
+
+Do not over-engineer content validation.
+
+Normal valid responses such as:
+
+```text
+"Sure."
+```
+
+must continue working.
+
+Whitespace-only responses are invalid.
+
+---
+
+# EMPTY RESPONSE BEHAVIOR
+
+When Groq successfully returns but produces no usable content:
+
+1. Classify the result as an empty response.
+2. Do not persist a user/assistant exchange containing a fake assistant response.
+3. Do not invoke memory extraction with an artificial response.
+4. Release the B2 conversation queue normally.
+5. Return a controlled failure/result to the caller.
+6. Preserve the existing general Discord error UX unless a minimal change is required.
+
+Do not invent a new elaborate user-facing error system.
+
+The exact existing caller behavior should be preserved where practical.
+
+---
+
+# IMPORTANT: USER MESSAGE PERSISTENCE
+
+Inspect the current architecture carefully before deciding whether the user message should be persisted when the model produces no valid response.
+
+Do not automatically persist a user message without its corresponding assistant response if doing so would break the current conversation model.
+
+The preferred behavior is:
+
+```text
+invalid/empty AI response
+        ↓
+do not persist a partial conversation exchange
+```
+
+unless the existing persistence model makes a different behavior clearly necessary.
+
+Document the decision.
+
+---
+
+# MALFORMED RESPONSE HANDLING
+
+The B1 Groq reliability layer already provides typed errors.
+
+B3 must ensure that unexpected model response shapes cannot accidentally become:
+
+```text
+undefined
+null
+"..."
+```
+
+or another invalid history entry.
+
+Before persistence:
+
+* validate the response
+* ensure usable string content
+* trim it
+* reject invalid content
+
+Do not allow runtime calls such as `.trim()` or `.slice()` to operate on unexpected non-string values without validation.
+
+If malformed output occurs:
+
+* classify it as `malformed_response` where appropriate
+* do not persist it
+* do not invoke memory extraction with it
+* release the B2 queue
+* let the existing caller error handling respond safely
+
+---
+
+# PART 2 — SEPARATE GENERATION FROM PERSISTENCE FAILURE
+
+This is the most important architectural change in B3.
+
+The current flow can effectively behave like:
+
+```text
+Groq succeeds
+      ↓
+SQLite persistence fails
+      ↓
+generateReply throws
+      ↓
+caller reports generic AI failure
+```
+
+This incorrectly implies that AI generation failed.
+
+B3 must distinguish:
+
+### Generation failure
+
+```text
+Groq failed
+```
+
+from:
+
+### Persistence failure
+
+```text
+Groq succeeded
+SQLite failed
+```
+
+---
+
+# DESIRED BEHAVIOR
+
+When AI generation succeeds but conversation persistence fails:
+
+```text
+Groq succeeds
+      ↓
+valid response
+      ↓
+attempt persistence
+      ↓
+persistence fails
+      ↓
+DO NOT convert this into an AI-generation failure
+```
+
+The generated response should remain available to the caller.
+
+The recommended behavior is:
+
+> Deliver the successful AI response while logging the persistence failure as a degraded conversation-history condition.
+
+However, if the repository's current Discord interaction architecture makes this unsafe, use the smallest safe alternative and document why.
+
+---
+
+# IMPORTANT PERSISTENCE SEMANTICS
+
+Do not silently swallow database errors.
+
+A persistence failure must remain observable.
+
+It should:
+
+* be classified/logged as a persistence failure
+* never expose database internals to the Discord user
+* never expose SQL, stack traces, paths, or secrets
+* not cause a successful AI response to be regenerated
+* not cause another Groq request
+* not permanently block the B2 queue
+
+---
+
+# CONVERSATION CONSISTENCY
+
+Be careful when delivering a response whose history could not be persisted.
+
+Do not falsely report that the response was saved.
+
+Do not attempt unsafe duplicate writes.
+
+Do not add a complicated recovery queue in B3.
+
+If persistence fails:
+
+* return the generated response according to the chosen degraded behavior
+* log the persistence failure
+* allow the B2 lock to release
+* let the next request reload whatever history was actually persisted
+
+Document the resulting semantics.
+
+---
+
+# B2 QUEUE COMPATIBILITY
+
+B3 must preserve B2's guarantee.
+
+Test:
+
+```text
+Request A
+    ↓
+Groq succeeds
+    ↓
+persistence fails
+    ↓
+queue releases
+    ↓
+Request B can proceed
+```
+
+Also test:
+
+```text
+Request A
+    ↓
+empty response
+    ↓
+queue releases
+    ↓
+Request B can proceed
+```
+
+No failure path may leave the conversation permanently locked.
+
+---
+
+# MEMORY EXTRACTION
+
+This task touches memory extraction only enough to prevent invalid input.
+
+Do NOT redesign B4.
+
+Specifically:
+
+### Valid response
+
+Memory extraction may continue normally.
+
+### Empty response
+
+Memory extraction must NOT run.
+
+### Malformed response
+
+Memory extraction must NOT run.
+
+### Persistence failure
+
+Do not redesign memory extraction behavior.
+
+The memory system itself remains B4.
+
+Do not change:
+
+* memory schema
+* memory limits
+* memory ranking
+* memory extraction prompts
+* memory architecture
+
+---
+
+# DO NOT IMPLEMENT B4
+
+Do not implement:
+
+* memory validation
+* memory quality scoring
+* memory deduplication redesign
+* memory persistence redesign
+* memory extraction retry policy
+* memory extraction observability redesign
+
+Only ensure invalid primary AI output is not passed to it.
+
+---
+
+# DO NOT IMPLEMENT B5
+
+Do not redesign:
+
+* Discord error messages
+* `/suggest` UX
+* `/edit` UX
+* broader AI command behavior
+* general error UX
+
+If the current caller requires a minimal compatibility adjustment, make only that adjustment.
+
+---
+
+# DO NOT MODIFY
+
+Do not modify:
+
+* prompts
+* personas
+* traits
+* token budgeting
+* database schema
+* migrations
+* B1 retry architecture
+* B2 queue architecture
+* unrelated commands
+* Replit configuration
+* environment configuration
+
+No new dependencies unless absolutely necessary.
+
+---
+
+# TESTING
+
+Inspect the repository's existing testing conventions.
+
+Add focused B3 tests.
+
+Do not use real Groq requests.
+
+At minimum test:
+
+## 1. Normal response
+
+Given:
+
+```text
+"Hello!"
+```
+
+Expected:
+
+* response returned
+* user/assistant exchange persisted
+* memory extraction behavior remains normal
+
+## 2. Empty content
+
+Given:
+
+```text
+""
+```
+
+Expected:
+
+* no `"..."` placeholder
+* no invalid assistant history entry
+* no memory extraction
+* controlled failure/result
+* B2 queue releases
+
+## 3. Whitespace content
+
+Given:
+
+```text
+"   "
+```
+
+Expected:
+
+Same as empty response.
+
+## 4. Missing content
+
+Given a response with no usable content field.
+
+Expected:
+
+* malformed/empty result
+* nothing invalid persisted
+* no memory extraction
+* queue releases
+
+## 5. Unexpected content type
+
+If the current TypeScript/runtime boundary can receive it, test a non-string content value.
+
+Expected:
+
+* no `.trim()` crash
+* no invalid history entry
+* safe failure
+* queue releases
+
+## 6. Persistence failure after successful generation
+
+Mock/force conversation persistence to fail after Groq returns valid text.
+
+Expected:
+
+* generated response remains available according to the chosen degraded behavior
+* no second Groq request
+* persistence failure is logged/classified
+* B2 queue releases
+
+## 7. Persistence success
+
+Verify normal behavior remains unchanged.
+
+## 8. Subsequent request after persistence failure
+
+Verify that a later request is not permanently blocked and loads the actual persisted history rather than an imaginary successful state.
+
+## 9. Empty response followed by another request
+
+Verify the next request can proceed normally.
+
+---
+
+# TEST THE ACTUAL BOUNDARY
+
+Where possible, test the behavior at the `generateReply()` boundary rather than only testing individual helper functions.
+
+The important contract is:
+
+```text
+generateReply()
+```
+
+must distinguish:
+
+* successful valid response
+* AI failure
+* empty response
+* malformed response
+* persistence failure
+
+without breaking the B2 queue.
+
+---
+
+# RETURN CONTRACT
+
+Choose the smallest clean API change necessary.
+
+If the current `generateReply()` return type is simply:
+
+```text
+string
+```
+
+and B3 requires distinguishing persistence failure while still returning the response, consider whether a small structured result is appropriate.
+
+For example:
+
+```text
+{
+  response,
+  persisted
+}
+```
+
+Do NOT blindly implement this exact shape if it would cause unnecessary changes throughout the project.
+
+Use the smallest maintainable contract.
+
+If callers do not need persistence status, do not force unrelated UI changes.
+
+---
+
+# VERIFICATION
+
+After implementation, run:
+
+```text id="e6m4ay"
+pnpm --filter @workspace/discord-bot run typecheck
+pnpm run typecheck
+git diff --check
+```
+
+Also run the repository's existing tests and formatting checks.
+
+Verify:
+
+* B1 still passes
+* B2 tests still pass
+* all new B3 tests pass
+* no database schema/migration changes
+* no unrelated files changed
+* no secrets changed
+* no new unnecessary dependencies
+
+Inspect the final Git diff.
+
+---
+
+# CHANGE SCOPE
+
+Before finishing, verify the diff contains only B3-related work.
+
+Do not modify B4/B5 functionality.
+
+Do not "clean up" unrelated code.
+
+Do not refactor the conversation architecture beyond what is required.
+
+---
+
+# FINAL REPORT
+
+When implementation is complete, provide:
+
+## Implementation
+
+Explain exactly how empty and malformed responses are handled.
+
+## Persistence
+
+Explain exactly what happens when:
+
+```text
+AI succeeds
++
+database persistence fails
+```
+
+## API Contract
+
+Explain any change made to `generateReply()` or related return/error types.
+
+## B2 Compatibility
+
+Explain how the conversation queue behaves through:
+
+* empty responses
+* malformed responses
+* persistence failures
+
+## Memory Compatibility
+
+Confirm empty/malformed responses are not sent to memory extraction.
+
+Do not claim B4 was implemented.
+
+## Files Changed
+
+List every changed/added file.
+
+## Tests
+
+List exact tests and results.
+
+## Verification
+
+Report:
+
+* typecheck
+* tests
+* formatting
+* `git diff --check`
+
+## Remaining
+
+Confirm:
+
+> B4 — Memory Reliability
+
+is the next scoped task.
+
+---
+
+# COMPLETION RULE
+
+B3 is complete only when:
+
+* `"..."` is no longer used as a persisted fake assistant response.
+* Empty responses are rejected safely.
+* Malformed responses cannot enter conversation history.
+* Empty/malformed responses do not enter memory extraction.
+* Successful AI generation is distinguishable from persistence failure.
+* A persistence failure cannot permanently block the B2 queue.
+* A persistence failure does not cause unnecessary AI regeneration.
+* B1 and B2 remain intact.
+* Tests and verification pass.
+* No B4/B5 work was silently implemented.
+
+**EXECUTE THE IMPLEMENTATION NOW.**
+
+Do not stop at an audit.
+
+Do not ask what I want done.
+
+Do not merely describe the changes.
+
+Inspect → modify → test → verify → report.

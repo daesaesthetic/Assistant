@@ -8,6 +8,7 @@
 import {
   createGroqCompletion,
   getGroqErrorLogContext,
+  GroqReliabilityError,
   TEXT_MODEL,
 } from "./groq.js";
 import { db } from "../database/index.js";
@@ -15,6 +16,14 @@ import { conversationStore } from "./conversation-store.js";
 
 const CONTEXT_TOKEN_BUDGET = 12_000;
 const CHARS_PER_ESTIMATED_TOKEN = 4;
+
+type PrimaryCompletionShape = {
+  choices?: Array<{
+    message?: {
+      content?: unknown;
+    };
+  }>;
+};
 
 const PERSONAS: Record<string, string> = {
   analyst:
@@ -137,12 +146,67 @@ export function buildBudgetedMessages(
   return [systemMessage, ...selectedHistory, currentMessage];
 }
 
+function createResponseError(
+  category: "empty_response" | "malformed_response",
+): GroqReliabilityError {
+  return new GroqReliabilityError({
+    category,
+    requestType: "text",
+    model: TEXT_MODEL,
+    attempts: 1,
+    elapsedMs: 0,
+  });
+}
+
+export function validatePrimaryResponse(completion: unknown): string {
+  const shape = completion as PrimaryCompletionShape | null;
+  const content = shape?.choices?.[0]?.message?.content;
+
+  if (typeof content !== "string") {
+    throw createResponseError("malformed_response");
+  }
+
+  const response = content.trim();
+  if (!response) {
+    throw createResponseError("empty_response");
+  }
+
+  return response;
+}
+
+export async function persistConversationHistory(
+  context: { userId: string; guildId: string },
+  history: Parameters<typeof conversationStore.setHistory>[1],
+  setHistory: (
+    context: { userId: string; guildId: string },
+    history: Parameters<typeof conversationStore.setHistory>[1],
+  ) => Promise<void> = (conversationContext, conversationHistory) =>
+    conversationStore.setHistory(conversationContext, conversationHistory),
+): Promise<boolean> {
+  try {
+    await setHistory(context, history);
+    return true;
+  } catch {
+    console.error("[Azurion] Conversation history persistence failed", {
+      category: "persistence",
+      userId: context.userId,
+      guildId: context.guildId,
+    });
+    return false;
+  }
+}
+
 export async function generateReply(params: {
   userId: string;
   guildId: string;
   content: string;
   resetHistory?: boolean;
-}): Promise<{ text: string; botName: string; personaLabel?: string }> {
+}): Promise<{
+  text: string;
+  botName: string;
+  personaLabel?: string;
+  persisted: boolean;
+}> {
   const { userId, guildId, content, resetHistory = false } = params;
 
   const context = { userId, guildId };
@@ -180,7 +244,7 @@ export async function generateReply(params: {
       { requestType: "text" },
     );
 
-    const response = completion.choices[0]?.message?.content?.trim() ?? "...";
+    const response = validatePrimaryResponse(completion);
 
     // Persist updated history (cap at 20 messages = 10 exchanges)
     const updatedHistory = [
@@ -188,7 +252,7 @@ export async function generateReply(params: {
       { role: "user" as const, content },
       { role: "assistant" as const, content: response },
     ].slice(-20);
-    await conversationStore.setHistory(context, updatedHistory);
+    const persisted = await persistConversationHistory(context, updatedHistory);
 
     // Fire memory extraction in the background — never blocks the reply
     void extractMemories(userId, guildId, content, response);
@@ -202,7 +266,7 @@ export async function generateReply(params: {
             persona.personaName.slice(1);
     }
 
-    return { text: response, botName, personaLabel };
+    return { text: response, botName, personaLabel, persisted };
   });
 }
 
