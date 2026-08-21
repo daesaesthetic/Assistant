@@ -1,0 +1,133 @@
+# PHASE 1.6B — FIRST SERVER FUNCTIONAL VERIFICATION
+
+The deployment diagnosis has identified and fixed the previous blocker:
+
+Root cause:
+The previous Groq text model `llama-3.3-70b-versatile` returned HTTP 404 because it is no longer available in the current Groq production model list.
+
+Fix:
+The text model is now `openai/gpt-oss-120b`.
+
+The existing B1 reliability layer, B2 queue, B3 response/persistence behavior, B4 memory reliability, B5 error handling, and Phase 1.5 context/personality behavior are NOT to be redesigned or changed.
+
+The bot is currently online and has successfully connected to Discord.
+
+Your remaining task is ONLY to perform controlled first-server functional verification.
+
+--------------------------------------------------
+TEST THESE FLOWS
+--------------------------------------------------
+
+In the designated Discord test server, verify:
+
+1. `/talk`
+   - Bot responds normally.
+   - Response is visible to the user.
+   - No duplicate response occurs.
+
+2. `/talk reset`
+   - Reset executes successfully.
+   - A subsequent `/talk` behaves as a fresh conversation.
+
+3. Follow-up conversation
+   - Send a second message that depends on the first.
+   - Verify conversation continuity works.
+
+4. Mention-based conversation
+   - Mention the bot.
+   - Verify it responds.
+
+5. `/suggest`
+   - Verify the command responds successfully.
+   - Test image input if the command supports it.
+
+6. `/edit`
+   - Verify the vision → Pollinations workflow completes.
+   - Do not repeatedly invoke it if image generation consumes external resources.
+
+7. Memory behavior
+   - Provide one harmless, non-sensitive preference.
+   - Later ask something where the preference is relevant.
+   - Verify the bot uses it naturally.
+   - Verify it does not mention internal memory/database mechanisms.
+
+8. Error handling
+   - Verify ordinary failures produce a safe user-facing message.
+   - Confirm no credentials, stack traces, SQL errors, or raw provider errors appear.
+
+--------------------------------------------------
+TEST DISCIPLINE
+--------------------------------------------------
+
+Use controlled requests only.
+
+Do not spam commands.
+Do not intentionally exhaust Groq or Pollinations quotas.
+Do not modify prompts or architecture during testing.
+
+If a test fails:
+
+1. Capture the exact runtime error.
+2. Identify the responsible layer.
+3. Determine whether it is:
+   - configuration
+   - command registration
+   - Discord delivery
+   - Groq
+   - Pollinations
+   - persistence
+   - conversation state
+   - memory/context
+   - permissions
+4. Fix only if it is a genuine first-release defect.
+
+Do not make speculative changes.
+
+--------------------------------------------------
+REGRESSION REQUIREMENT
+--------------------------------------------------
+
+If any source code is changed:
+
+- Run bot tests.
+- Run bot typecheck.
+- Run workspace typecheck if applicable.
+- Run Prettier on changed files.
+- Run `git diff --check`.
+- Repeat the failed live test.
+
+Do not modify unrelated files.
+
+--------------------------------------------------
+FINAL REPORT
+--------------------------------------------------
+
+Return:
+
+| Test | Result |
+|---|---|
+| `/talk` | PASS/FAIL |
+| `/talk reset` | PASS/FAIL |
+| Follow-up conversation | PASS/FAIL |
+| Mention | PASS/FAIL |
+| `/suggest` | PASS/FAIL |
+| `/edit` | PASS/FAIL |
+| Memory behavior | PASS/FAIL |
+| Error handling | PASS/FAIL |
+
+Also report:
+
+- Any defects discovered
+- Any fixes made
+- Tests/typechecks after fixes
+- Whether the bot remains online
+
+Final status must be exactly one of:
+
+FIRST RELEASE VERIFIED
+
+FIRST RELEASE VERIFIED WITH KNOWN LIMITATIONS
+
+FIRST RELEASE BLOCKED
+
+Do not claim verification unless the corresponding Discord interaction was actually tested.
