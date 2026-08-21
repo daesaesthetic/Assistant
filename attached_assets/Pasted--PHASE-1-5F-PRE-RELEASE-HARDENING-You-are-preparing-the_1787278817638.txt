@@ -1,0 +1,343 @@
+# PHASE 1.5F — PRE-RELEASE HARDENING
+
+You are preparing the Assistant Discord bot for its first real server deployment.
+
+Completed and considered stable:
+
+- Phase 1.4B.1 — Shared Groq Reliability
+- Phase 1.4B.2 — Conversation Concurrency
+- Phase 1.4B.3 — Primary Response Validation
+- Phase 1.4B.4 — Memory Reliability
+- Phase 1.4B.5 — Caller-Level Error Handling
+- Phase 1.5A — Context Boundary
+- Phase 1.5B — Context Budgeting
+- Phase 1.5C — Context Relevance & Memory Intelligence
+- Phase 1.5D — Conversation Quality
+- Phase 1.5E — Personality & Memory Behavior
+
+This is the FINAL pre-deployment engineering pass.
+
+Do not add new intelligence architecture.
+
+Do not redesign the context system.
+
+Do not add dependencies unless an existing project requirement is genuinely broken without one.
+
+Do not add embeddings, vector search, RAG, summaries, additional AI calls, analytics systems, or new persistence systems.
+
+The objective is to identify and fix only issues that could reasonably interfere with a first real Discord deployment.
+
+---
+
+## 1. REPOSITORY HEALTH
+
+Inspect the current repository and verify:
+
+- No accidental debug code
+- No temporary files
+- No generated SQLite runtime artifacts
+- No hardcoded secrets
+- No API keys or tokens committed
+- No unnecessary development files included in runtime paths
+- No broken imports
+- No stale references to removed functionality
+- No unintended Phase 1.4B–1.5E modifications
+
+Do not modify unrelated legacy formatting.
+
+---
+
+## 2. ENVIRONMENT / SECRETS
+
+Audit how the bot expects its required environment variables.
+
+Identify:
+
+- Required Discord credentials
+- Required Groq credentials
+- Any required optional API credentials
+- Required database/configuration variables
+- Replit-specific environment requirements
+
+Do NOT request, print, expose, or store actual secret values.
+
+Verify that missing secrets fail safely and produce understandable configuration behavior.
+
+Do not change secret names unless an actual bug requires it.
+
+---
+
+## 3. DISCORD COMMAND SAFETY
+
+Review the primary user-facing paths:
+
+- `/talk`
+- `/talk reset`
+- Automatic mentions
+- Configured bot channels
+- `/suggest`
+- `/edit`
+
+Check for:
+
+- Interaction acknowledgement problems
+- Double replies
+- Unhandled interaction failures
+- Invalid assumptions about guild context
+- DM behavior
+- Permission failures
+- Missing-channel behavior
+- Message length issues
+- Discord embed limits
+- Safe fallback behavior
+
+Do not redesign command behavior.
+
+Fix only concrete release-blocking or clearly user-visible issues.
+
+---
+
+## 4. AI REQUEST SAFETY
+
+Verify that all production Groq calls still pass through the B1 reliability boundary.
+
+Confirm:
+
+- No raw Groq calls outside the shared utility
+- Explicit timeouts remain configured
+- SDK retry ownership remains disabled
+- Application retry ownership remains centralized
+- Error classification remains intact
+- No caller performs an additional hidden retry
+
+Do not change retry policy during this phase unless a clear correctness bug is discovered.
+
+---
+
+## 5. CONVERSATION SAFETY
+
+Verify:
+
+- Per-user/guild serialization remains intact
+- Reset behavior remains deterministic
+- Failed requests release the queue
+- Persistence failures do not permanently block conversations
+- Invalid AI responses are not persisted
+- Empty responses are not persisted
+- Current messages are not accidentally duplicated
+- History remains bounded by the existing architecture
+
+Do not redesign the queue.
+
+---
+
+## 6. MEMORY SAFETY
+
+Verify:
+
+- Invalid extracted memories cannot enter the database
+- Empty memories are rejected
+- Overlong memories are rejected
+- Duplicate protection remains intact
+- The 30-memory limit remains intact
+- Memory extraction cannot block the primary conversation
+- Memory extraction cannot permanently lock a conversation
+- Memory extraction failures remain non-critical
+- Relevant-memory selection remains intact
+
+Do not add new memory features.
+
+---
+
+## 7. CONTEXT SAFETY
+
+Verify that the completed 1.5A–1.5E context system still:
+
+- Preserves the current user request
+- Preserves recent conversation
+- Selects relevant memories
+- Avoids excessive irrelevant memories
+- Preserves persona
+- Preserves traits
+- Maintains context budgeting
+- Avoids exposing internal memory/database terminology
+- Does not allow memories or persona text to override the current request
+
+Do not rewrite the context architecture.
+
+---
+
+## 8. USER-FACING ERRORS
+
+Review all major failure paths.
+
+Ensure users do not receive:
+
+- Stack traces
+- SQL errors
+- API keys
+- Provider internals
+- Raw Groq exceptions
+- Raw Pollinations errors
+- Internal filesystem paths
+- Debug output
+
+Ensure categorized errors remain understandable to ordinary Discord users.
+
+Do not rewrite the entire error-message system.
+
+---
+
+## 9. LOGGING
+
+Verify that logs contain useful operational information without leaking:
+
+- User message contents
+- AI prompts
+- AI responses
+- API keys
+- Credentials
+- Sensitive database contents
+
+Safe metadata such as operation, category, status, elapsed time, and retry state is acceptable.
+
+Do not build a new logging framework.
+
+---
+
+## 10. TESTING
+
+Run the complete available test suite.
+
+Run:
+
+- Discord bot tests
+- Workspace tests where applicable
+- Bot typecheck
+- Workspace typecheck
+- Prettier on changed files
+- `git diff --check`
+
+If practical, inspect the final Git diff and status.
+
+Do not start the Discord workflow because credentials may not be configured.
+
+---
+
+## 11. FIX POLICY
+
+Only fix issues that are:
+
+### Release-blocking
+Examples:
+
+- Secrets exposed
+- Broken imports
+- Type errors
+- Broken command execution
+- Queue deadlocks
+- Invalid AI responses entering persistence
+- Crashes on ordinary user input
+- Unhandled Discord interaction failures
+
+OR:
+
+### Clearly user-visible
+Examples:
+
+- Duplicate Discord replies
+- Broken reset behavior
+- Invalid embeds
+- Incorrect command handling
+- Obvious configuration failure
+
+Do NOT fix:
+
+- Cosmetic formatting in unrelated legacy files
+- Speculative architecture
+- Future scalability
+- Features that have not been tested in real use
+- Subjective personality preferences
+- Large refactors
+
+Record those under deferred work instead.
+
+---
+
+## 12. LIVE DEPLOYMENT PREPARATION
+
+Do not actually deploy the bot.
+
+Instead, produce a concise deployment checklist containing:
+
+1. Required secrets
+2. Required Replit configuration
+3. Required Discord Developer Portal configuration
+4. Required bot permissions/intents
+5. Database initialization requirements
+6. Startup command/workflow
+7. First-server testing steps
+8. Safe rollback procedure
+
+Do not invent settings that are not present in the repository.
+
+If something cannot be confirmed from the repository, explicitly mark it:
+
+"Requires manual confirmation."
+
+---
+
+## ACCEPTANCE CRITERIA
+
+Phase 1.5F passes only if:
+
+- Complete test suite passes
+- Bot typecheck passes
+- Workspace typecheck passes
+- Prettier passes for changed files
+- `git diff --check` passes
+- No secrets are exposed
+- No release-blocking issue remains
+- B1–B5 remain intact
+- 1.5A–1.5E remain intact
+- No unnecessary architecture is introduced
+
+---
+
+## FINAL REPORT
+
+Return:
+
+### Release Audit
+- Repository health
+- Environment/secrets audit
+- Discord audit
+- AI reliability audit
+- Conversation audit
+- Memory audit
+- Context audit
+
+### Changes
+List only files actually modified.
+
+### Verification
+Report exact test/typecheck/formatting results.
+
+### Release Blockers
+List any remaining blockers.
+
+### Deployment Checklist
+Provide the exact manual steps required before starting the bot.
+
+### Deferred After Release
+List improvements that should wait for real-world testing.
+
+### Final Status
+
+Choose exactly one:
+
+- READY FOR FIRST SERVER TEST
+- READY WITH MANUAL CONFIGURATION REQUIRED
+- NOT READY — BLOCKERS REMAIN
+
+Do not claim READY unless the acceptance criteria pass.
