@@ -1,20 +1,23 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../utils/embeds.js";
 import { generateReply } from "../utils/conversation.js";
+import { getGroqErrorLogContext } from "../utils/groq.js";
 import type { Command } from "../types.js";
 
 export default {
   data: new SlashCommandBuilder()
     .setName("talk")
-    .setDescription("Have a conversation — Azurion remembers your exchanges over time")
+    .setDescription(
+      "Have a conversation — Azurion remembers your exchanges over time",
+    )
     .addStringOption((opt) =>
-      opt.setName("message").setDescription("Your message").setRequired(true)
+      opt.setName("message").setDescription("Your message").setRequired(true),
     )
     .addBooleanOption((opt) =>
       opt
         .setName("reset")
         .setDescription("Clear your conversation history and start fresh")
-        .setRequired(false)
+        .setRequired(false),
     ),
   cooldown: 5,
   async execute(interaction: ChatInputCommandInteraction) {
@@ -43,9 +46,11 @@ export default {
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err) {
-      console.error("[/talk]", err);
+      console.error("[/talk]", getGroqErrorLogContext(err));
       await interaction.editReply({
-        embeds: [createErrorEmbed("Failed to process your message. Please try again.")],
+        embeds: [
+          createErrorEmbed("Failed to process your message. Please try again."),
+        ],
       });
     }
   },

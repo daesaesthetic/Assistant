@@ -1,0 +1,1 @@
+- [Groq SDK retry defaults](groq-sdk-retry-defaults.md) — disable implicit SDK retries before adding application-owned retry behavior.

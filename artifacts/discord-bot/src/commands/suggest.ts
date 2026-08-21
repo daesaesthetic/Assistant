@@ -1,5 +1,10 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
-import { groq, TEXT_MODEL, VISION_MODEL } from "../utils/groq.js";
+import {
+  createGroqCompletion,
+  getGroqErrorLogContext,
+  TEXT_MODEL,
+  VISION_MODEL,
+} from "../utils/groq.js";
 import { createEmbed, createErrorEmbed } from "../utils/embeds.js";
 import type { Command } from "../types.js";
 
@@ -8,10 +13,16 @@ export default {
     .setName("suggest")
     .setDescription("Get intelligent, high-quality suggestions for any query")
     .addStringOption((opt) =>
-      opt.setName("query").setDescription("What do you need suggestions for?").setRequired(true)
+      opt
+        .setName("query")
+        .setDescription("What do you need suggestions for?")
+        .setRequired(true),
     )
     .addAttachmentOption((opt) =>
-      opt.setName("image").setDescription("Optional image for visual context").setRequired(false)
+      opt
+        .setName("image")
+        .setDescription("Optional image for visual context")
+        .setRequired(false),
     ),
   cooldown: 10,
   async execute(interaction: ChatInputCommandInteraction) {
@@ -42,25 +53,32 @@ export default {
         userContent = `Provide suggestions for: ${query}`;
       }
 
-      const completion = await groq.chat.completions.create({
-        model: image ? VISION_MODEL : TEXT_MODEL,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
-        ],
-        max_tokens: 900,
-      });
+      const completion = await createGroqCompletion(
+        {
+          model: image ? VISION_MODEL : TEXT_MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userContent },
+          ],
+          max_tokens: 900,
+        },
+        { requestType: image ? "vision" : "text" },
+      );
 
-      const response = completion.choices[0]?.message?.content ?? "No suggestions could be generated.";
+      const response =
+        completion.choices[0]?.message?.content ??
+        "No suggestions could be generated.";
 
       const embed = createEmbed("Suggestions", response.slice(0, 4096));
       if (image) embed.setThumbnail(image.url);
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err) {
-      console.error("[/suggest]", err);
+      console.error("[/suggest]", getGroqErrorLogContext(err));
       await interaction.editReply({
-        embeds: [createErrorEmbed("Failed to generate suggestions. Please try again.")],
+        embeds: [
+          createErrorEmbed("Failed to generate suggestions. Please try again."),
+        ],
       });
     }
   },

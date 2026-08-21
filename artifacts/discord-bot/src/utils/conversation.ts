@@ -5,7 +5,11 @@
  * Handles persona resolution, trait injection, capability awareness,
  * memory injection, history management, and background memory extraction.
  */
-import { groq, TEXT_MODEL } from "./groq.js";
+import {
+  createGroqCompletion,
+  getGroqErrorLogContext,
+  TEXT_MODEL,
+} from "./groq.js";
 import { db } from "../database/index.js";
 import { conversationStore } from "./conversation-store.js";
 
@@ -46,11 +50,10 @@ function buildSystemPrompt(
   botName: string,
   personaName?: string,
   customDesc?: string,
-  traits?: string[]
+  traits?: string[],
 ): string {
   // ── Core identity (always present) ───────────────────────────────────────
-  const identity =
-    `You are ${botName}. You are a capable, perceptive assistant with a clean, slightly mysterious presence — never robotic, never overly enthusiastic. You are concise, context-aware, and genuine. Never break character. Never mention being an AI, a language model, or any underlying technology. Respond as ${botName} at all times.`;
+  const identity = `You are ${botName}. You are a capable, perceptive assistant with a clean, slightly mysterious presence — never robotic, never overly enthusiastic. You are concise, context-aware, and genuine. Never break character. Never mention being an AI, a language model, or any underlying technology. Respond as ${botName} at all times.`;
 
   // ── Capabilities (so the bot can answer "what can you do?" accurately) ───
   const capabilities = `
@@ -86,11 +89,14 @@ Your capabilities — when a user asks what you can do, draw from this list natu
 export function buildBudgetedMessages(
   systemPrompt: string,
   history: Array<{ role: "user" | "assistant"; content: string }>,
-  currentContent: string
+  currentContent: string,
 ): ChatMessage[] {
   const currentMessage: ChatMessage = { role: "user", content: currentContent };
   const currentTokens = estimateTokens(currentContent);
-  const availableForSystemAndHistory = Math.max(0, CONTEXT_TOKEN_BUDGET - currentTokens);
+  const availableForSystemAndHistory = Math.max(
+    0,
+    CONTEXT_TOKEN_BUDGET - currentTokens,
+  );
 
   // The system prompt is assembled in priority order. If it is too large,
   // preserve the stable instructions and trim the lower-priority tail first.
@@ -100,12 +106,19 @@ export function buildBudgetedMessages(
   };
   let remainingTokens = Math.max(
     0,
-    availableForSystemAndHistory - estimateTokens(systemMessage.content)
+    availableForSystemAndHistory - estimateTokens(systemMessage.content),
   );
 
   // Select recent history first, then restore chronological ordering.
-  const selectedHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
-  for (let index = history.length - 1; index >= 0 && remainingTokens > 0; index -= 1) {
+  const selectedHistory: Array<{
+    role: "user" | "assistant";
+    content: string;
+  }> = [];
+  for (
+    let index = history.length - 1;
+    index >= 0 && remainingTokens > 0;
+    index -= 1
+  ) {
     const message = history[index];
     const messageTokens = estimateTokens(message.content);
     if (messageTokens <= remainingTokens) {
@@ -136,16 +149,16 @@ export async function generateReply(params: {
 
   if (resetHistory) await conversationStore.reset(context);
 
-  const botName  = await db.getBotName(guildId);
-  const persona  = await db.getPersona(userId, guildId);
+  const botName = await db.getBotName(guildId);
+  const persona = await db.getPersona(userId, guildId);
   const memories = await db.getMemories(userId, guildId);
-  const traits   = await db.getTraits(userId, guildId);
+  const traits = await db.getTraits(userId, guildId);
 
   let systemPrompt = buildSystemPrompt(
     botName,
     persona?.personaName,
     persona?.customDescription,
-    traits
+    traits,
   );
 
   if (memories.length > 0) {
@@ -157,11 +170,14 @@ export async function generateReply(params: {
   const history = await conversationStore.getHistory(context);
   const messages = buildBudgetedMessages(systemPrompt, history, content);
 
-  const completion = await groq.chat.completions.create({
-    model: TEXT_MODEL,
-    messages,
-    max_tokens: 800,
-  });
+  const completion = await createGroqCompletion(
+    {
+      model: TEXT_MODEL,
+      messages,
+      max_tokens: 800,
+    },
+    { requestType: "text" },
+  );
 
   const response = completion.choices[0]?.message?.content?.trim() ?? "...";
 
@@ -181,7 +197,8 @@ export async function generateReply(params: {
     personaLabel =
       persona.personaName === "custom"
         ? "Custom"
-        : persona.personaName.charAt(0).toUpperCase() + persona.personaName.slice(1);
+        : persona.personaName.charAt(0).toUpperCase() +
+          persona.personaName.slice(1);
   }
 
   return { text: response, botName, personaLabel };
@@ -191,33 +208,44 @@ async function extractMemories(
   userId: string,
   guildId: string,
   userMsg: string,
-  assistantMsg: string
+  assistantMsg: string,
 ): Promise<void> {
   try {
-    const completion = await groq.chat.completions.create({
-      model: TEXT_MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            'You extract concrete personal facts about the user from a conversation turn. Return ONLY a valid JSON array of short strings. Examples: ["prefers dark mode","works as a nurse","lives in Tokyo"]. Only include definitive personal facts the user stated about themselves — not questions they asked, not what was said to them, not vague impressions. If nothing concrete was learned, return [].',
-        },
-        {
-          role: "user",
-          content: `User said: "${userMsg}"\nAssistant replied: "${assistantMsg}"`,
-        },
-      ],
-      max_tokens: 150,
-    });
+    const completion = await createGroqCompletion(
+      {
+        model: TEXT_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              'You extract concrete personal facts about the user from a conversation turn. Return ONLY a valid JSON array of short strings. Examples: ["prefers dark mode","works as a nurse","lives in Tokyo"]. Only include definitive personal facts the user stated about themselves — not questions they asked, not what was said to them, not vague impressions. If nothing concrete was learned, return [].',
+          },
+          {
+            role: "user",
+            content: `User said: "${userMsg}"\nAssistant replied: "${assistantMsg}"`,
+          },
+        ],
+        max_tokens: 150,
+      },
+      { requestType: "memory" },
+    );
 
     const raw = completion.choices[0]?.message?.content?.trim() ?? "[]";
     const match = raw.match(/\[[\s\S]*\]/);
     if (!match) return;
     const facts = JSON.parse(match[0]) as unknown;
     if (Array.isArray(facts) && facts.length > 0) {
-      await db.addMemories(userId, guildId, facts.filter((f): f is string => typeof f === "string"));
+      await db.addMemories(
+        userId,
+        guildId,
+        facts.filter((f): f is string => typeof f === "string"),
+      );
     }
-  } catch {
-    // Memory extraction is non-critical — fail silently
+  } catch (error) {
+    // Memory extraction is non-critical and must not affect the primary reply.
+    console.error(
+      "[Azurion] Memory extraction failed",
+      getGroqErrorLogContext(error),
+    );
   }
 }

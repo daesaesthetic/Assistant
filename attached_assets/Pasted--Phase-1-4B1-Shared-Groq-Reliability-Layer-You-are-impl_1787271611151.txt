@@ -1,0 +1,463 @@
+# Phase 1.4B1 — Shared Groq Reliability Layer
+
+You are implementing **Phase 1.4B1 — Shared Groq Reliability Layer** for Assistant-Beta-2.5.
+
+The Phase 1.4B read-only audit has been completed and reviewed.
+
+This is now an **implementation task**.
+
+## Objective
+
+Create a small, centralized reliability boundary around Groq requests that provides:
+
+* Explicit request timeouts
+* Controlled retry behavior
+* Error classification
+* Rate-limit awareness
+* Safe structured logging
+
+The goal is to make AI requests predictable and diagnosable without redesigning the assistant.
+
+---
+
+# Scope
+
+This task is limited to the shared Groq reliability layer.
+
+### You MAY modify
+
+Only files directly required to implement B1, including:
+
+* `artifacts/discord-bot/src/utils/groq.ts`
+* A new small utility under `artifacts/discord-bot/src/utils/` if genuinely necessary
+* The minimum number of existing AI callers required to use the new reliability boundary
+
+Potential callers include:
+
+* `conversation.ts`
+* `/suggest`
+* `/edit`
+* memory extraction
+
+However, do not migrate callers unnecessarily if doing so would expand the scope beyond B1.
+
+### You MUST NOT modify
+
+Do not implement:
+
+* Conversation concurrency control
+* Conversation persistence redesign
+* Conversation history changes
+* Memory architecture changes
+* Token-budget changes
+* Prompt changes
+* Persona changes
+* Trait changes
+* Database schema changes
+* Database migrations
+* Discord command behavior changes
+* New AI features
+* New dependencies unless absolutely necessary and explicitly justified
+
+Those belong to later Phase 1.4 tracks.
+
+---
+
+# Before Editing
+
+Inspect the current implementation and confirm:
+
+1. How `groq.ts` currently initializes the SDK.
+2. Which files directly call the Groq client.
+3. Which model types are used.
+4. Which callers require text generation.
+5. Which callers require vision generation.
+6. How current errors propagate.
+7. Whether the existing SDK version supports the required timeout/retry controls.
+8. Whether the SDK already performs implicit retries.
+
+Do not replace working infrastructure unnecessarily.
+
+---
+
+# 1. Shared Reliability Boundary
+
+Create or extend the shared Groq utility so callers can make requests through one consistent reliability layer.
+
+The abstraction should support the existing request types without forcing unrelated architectural changes.
+
+It should be possible for callers to specify, when necessary:
+
+* Request type/category
+* Timeout
+* Model/request parameters
+* Whether the request is eligible for retry
+
+Avoid exposing unnecessary implementation details to callers.
+
+---
+
+# 2. Explicit Timeout
+
+Introduce application-level Groq timeouts.
+
+Use these initial defaults unless repository inspection demonstrates a compelling reason to adjust them:
+
+### Standard text requests
+
+**30 seconds**
+
+### Vision requests
+
+**45 seconds**
+
+### Background memory extraction
+
+**15 seconds**
+
+The timeout must apply to the actual Groq request.
+
+Do not merely stop waiting in the Discord handler while leaving the underlying request uncontrolled.
+
+Use the capabilities of the currently installed Groq SDK rather than adding another timeout dependency.
+
+Make timeout values centralized/configurable inside the AI reliability layer.
+
+---
+
+# 3. Retry Policy
+
+Implement a **single, explicit retry owner**.
+
+Do not accidentally create:
+
+```text
+Application retry
+    +
+SDK retry
+    +
+Caller retry
+```
+
+which could multiply requests.
+
+Determine the current SDK retry behavior and configure it explicitly so the application's intended retry policy is predictable.
+
+### Recommended policy
+
+At most **one application-visible retry** for transient failures.
+
+Potentially retry:
+
+* HTTP 408
+* HTTP 409
+* HTTP 500
+* HTTP 502
+* HTTP 503
+* HTTP 504
+* transient network/transport failures
+
+Do NOT retry:
+
+* HTTP 400
+* Context-size failures
+* malformed requests
+* HTTP 401
+* HTTP 403
+* invalid model configuration
+* malformed application data
+* empty model responses
+
+For HTTP 429:
+
+* Inspect `Retry-After` when available.
+* Retry only when the indicated delay is below a reasonable configured ceiling.
+* Do not sleep for an excessive period inside a Discord interaction.
+* If retrying would exceed the overall request deadline, fail cleanly instead.
+
+Use short exponential backoff with jitter where appropriate.
+
+Do not introduce a large retry framework for this.
+
+---
+
+# 4. Error Classification
+
+Create a small internal error classification system.
+
+Use these categories where applicable:
+
+```text
+configuration
+rate_limit
+context
+transient_provider
+network
+timeout
+empty_response
+malformed_response
+unknown
+```
+
+Do not over-engineer the taxonomy.
+
+The classification must preserve the original error when useful for logging/debugging.
+
+Callers should be able to determine the category without parsing raw error strings.
+
+---
+
+# 5. Rate-Limit Handling
+
+When Groq returns HTTP 429:
+
+1. Identify it as `rate_limit`.
+2. Inspect available response headers safely.
+3. Read `Retry-After` when present.
+4. Determine whether a retry is reasonable.
+5. Never retry indefinitely.
+6. Never expose raw provider headers or internal errors to Discord users.
+
+Log structured information such as:
+
+* category
+* HTTP status
+* retry attempted
+* retry delay if safe
+* request type
+* elapsed time
+
+Do not log:
+
+* API keys
+* Authorization headers
+* complete prompts
+* complete model responses
+* sensitive user content
+
+---
+
+# 6. Logging
+
+Make AI failures observable.
+
+Use the project's existing logging conventions where possible.
+
+At minimum, reliability logs should identify:
+
+* AI request category
+* model
+* error category
+* HTTP status when available
+* whether a retry occurred
+* elapsed time
+* timeout occurrence
+
+Avoid introducing a large logging framework.
+
+Do not dump complete exceptions if they may contain secrets or sensitive request data.
+
+If the existing project uses `console.error`, structured prefixes/objects are acceptable.
+
+---
+
+# 7. Missing API Key
+
+The current project creates a Groq client using a placeholder when `GROQ_API_KEY` is missing.
+
+Do not redesign application startup in this task.
+
+However, improve the reliability boundary so missing configuration is classified clearly as:
+
+```text
+configuration
+```
+
+rather than being treated as a generic provider failure.
+
+Do not expose the key or raw authentication details.
+
+---
+
+# 8. Caller Compatibility
+
+Existing AI callers should continue receiving enough information to produce their current user-facing behavior.
+
+Do not redesign their Discord messages during B1.
+
+For example, if `/talk` currently catches an error and sends a generic failure message, B1 should provide the structured error underneath that behavior.
+
+Improving user-facing error messages belongs to a later integration step unless the change is required to correctly consume the new reliability boundary.
+
+---
+
+# 9. Do Not Implement B2–B5
+
+Explicitly do NOT fix:
+
+### B2
+
+* Conversation race conditions
+* History locking
+* Reset concurrency
+* Persistence semantics
+
+### B3
+
+* Empty-response history changes
+* Conversation persistence changes
+* Response fallback redesign
+
+### B4
+
+* Memory extraction validation
+* Memory extraction persistence changes
+* Memory reliability redesign
+
+### B5
+
+* Broad caller migration unrelated to establishing the shared reliability boundary
+
+Those will be handled separately.
+
+If a later task is necessary, document it rather than implementing it now.
+
+---
+
+# 10. Dependencies
+
+Prefer the existing pinned Groq SDK.
+
+Do not install a retry library, timeout library, logging framework, or other dependency unless absolutely necessary.
+
+If a dependency appears necessary:
+
+1. Stop before installing it.
+2. Explain why the existing SDK/project cannot provide the required functionality.
+3. Report the dependency and its impact.
+
+The preferred implementation should use the existing stack.
+
+---
+
+# 11. Tests
+
+Add or update tests only if the repository already has a testing structure suitable for them.
+
+If adding tests is consistent with the existing project:
+
+Test at minimum:
+
+### Success
+
+* Successful text request
+* Successful vision request
+
+### Timeout
+
+* Timeout is classified correctly.
+
+### Retry
+
+* 500 retries once.
+* 503 retries once.
+* 429 with acceptable `Retry-After` retries appropriately.
+* 429 with excessive delay does not wait indefinitely.
+* 400 does not retry.
+* 401 does not retry.
+* Context-size failure does not retry.
+
+### Network
+
+* Transient network failure retries once.
+* Persistent network failure eventually fails.
+
+### Configuration
+
+* Missing API key is classified as configuration failure.
+
+### Logging
+
+* Error category is observable.
+* Secrets are not logged.
+
+Do not create an enormous test framework for this task.
+
+---
+
+# 12. Verification
+
+Before declaring B1 complete:
+
+1. Run the project's existing test suite.
+2. Run any relevant TypeScript/build checks.
+3. Verify the bot still starts.
+4. Verify existing AI callers compile.
+5. Verify no unrelated files changed.
+6. Verify no database files/schema/migrations changed.
+7. Verify no environment secrets were exposed.
+8. Verify retry behavior does not multiply unexpectedly.
+9. Verify the Groq SDK's own retries are not accidentally stacked with the new policy.
+
+---
+
+# 13. Change Report
+
+When finished, report:
+
+## Changed
+
+List every modified file.
+
+## Added
+
+List any newly created files.
+
+## Unchanged
+
+Confirm that database, migrations, prompts, personas, traits, memories, conversation persistence, and Discord behavior were not intentionally changed.
+
+## Reliability Behavior
+
+Summarize:
+
+* timeout values
+* retry count
+* retryable failures
+* rate-limit behavior
+* error categories
+* logging behavior
+
+## Tests
+
+List exactly what was run and the results.
+
+## Remaining Work
+
+Explicitly identify what belongs to B2, B3, B4, and B5.
+
+## Regression Risk
+
+Identify any known risks.
+
+---
+
+# Completion Rule
+
+B1 is complete only when:
+
+* The shared Groq reliability boundary exists.
+* Explicit timeout behavior exists.
+* Retry behavior is bounded and predictable.
+* SDK/application retry stacking is avoided.
+* Errors can be classified.
+* Rate limits are recognized.
+* Failures are observable without leaking secrets.
+* Existing AI functionality still builds/tests.
+* No unrelated Phase 1.4 work was implemented.
+
+Do not claim B1 is complete if tests/build checks fail.
+
+Do not silently expand the scope.
+
+The next task after B1 will be **Phase 1.4B2 — Conversation Reliability & Concurrency**.

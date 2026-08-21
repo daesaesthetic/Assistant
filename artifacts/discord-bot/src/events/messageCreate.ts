@@ -2,16 +2,17 @@ import { Events, Message, TextChannel } from "discord.js";
 import { db } from "../database/index.js";
 import { createEmbed } from "../utils/embeds.js";
 import { generateReply } from "../utils/conversation.js";
+import { getGroqErrorLogContext } from "../utils/groq.js";
 import type { Event } from "../types.js";
 
 // Spam detection: track recent message timestamps per user per guild
 const spamMap = new Map<string, number[]>();
 
-const SPAM_WINDOW_MS = 5000;      // 5-second window
-const SPAM_LIMIT = 5;              // messages before triggering
-const CAPS_RATIO = 0.70;           // 70% uppercase threshold
-const CAPS_MIN_LENGTH = 10;        // minimum message length to check caps
-const WARNING_THRESHOLD = 3;       // warnings before timeout
+const SPAM_WINDOW_MS = 5000; // 5-second window
+const SPAM_LIMIT = 5; // messages before triggering
+const CAPS_RATIO = 0.7; // 70% uppercase threshold
+const CAPS_MIN_LENGTH = 10; // minimum message length to check caps
+const WARNING_THRESHOLD = 3; // warnings before timeout
 const TIMEOUT_MS = 10 * 60 * 1000; // 10-minute timeout
 
 export default {
@@ -32,7 +33,9 @@ export default {
     // 1. Spam detection
     const spamKey = `${userId}:${guildId}`;
     const now = Date.now();
-    const timestamps = (spamMap.get(spamKey) ?? []).filter((t) => now - t < SPAM_WINDOW_MS);
+    const timestamps = (spamMap.get(spamKey) ?? []).filter(
+      (t) => now - t < SPAM_WINDOW_MS,
+    );
     timestamps.push(now);
     spamMap.set(spamKey, timestamps);
     if (timestamps.length >= SPAM_LIMIT) {
@@ -45,14 +48,17 @@ export default {
       const letters = message.content.replace(/[^a-zA-Z]/g, "");
       if (letters.length >= CAPS_MIN_LENGTH) {
         const capsCount = (message.content.match(/[A-Z]/g) ?? []).length;
-        if (capsCount / letters.length >= CAPS_RATIO) violation = "excessive capitalization";
+        if (capsCount / letters.length >= CAPS_RATIO)
+          violation = "excessive capitalization";
       }
     }
 
     // 3. Blacklisted words
     if (!violation && guildConfig?.blacklistedWords?.length) {
       const lower = message.content.toLowerCase();
-      const hit = guildConfig.blacklistedWords.find((w) => lower.includes(w.toLowerCase()));
+      const hit = guildConfig.blacklistedWords.find((w) =>
+        lower.includes(w.toLowerCase()),
+      );
       if (hit) violation = "blacklisted word";
     }
 
@@ -69,30 +75,54 @@ export default {
         .setDescription(
           `<@${userId}> — message removed for **${violation}**.\nWarning **${count}/${WARNING_THRESHOLD}**.${
             timedOut ? "\n\n**Timeout applied (10 minutes).**" : ""
-          }`
+          }`,
         );
-      const warnMsg = await (message.channel as TextChannel).send({ embeds: [warnEmbed] }).catch(() => null);
+      const warnMsg = await (message.channel as TextChannel)
+        .send({ embeds: [warnEmbed] })
+        .catch(() => null);
       if (warnMsg) setTimeout(() => warnMsg.delete().catch(() => {}), 8000);
 
       if (timedOut && message.member?.moderatable) {
         await message.member
-          .timeout(TIMEOUT_MS, `Automod: exceeded warning threshold (${violation})`)
+          .timeout(
+            TIMEOUT_MS,
+            `Automod: exceeded warning threshold (${violation})`,
+          )
           .catch(() => {});
         await db.resetWarnings(userId, guildId);
       }
 
       const modChannelId = guildConfig?.modLogChannelId;
       if (modChannelId) {
-        const logChannel = message.guild.channels.cache.get(modChannelId) as TextChannel | undefined;
+        const logChannel = message.guild.channels.cache.get(modChannelId) as
+          TextChannel | undefined;
         if (logChannel?.isTextBased()) {
           const logEmbed = createEmbed("Mod Log — Automod Action")
             .setColor(timedOut ? 0xff2222 : 0xff9900)
             .addFields(
-              { name: "User", value: `${message.author.tag} (<@${userId}>)`, inline: true },
+              {
+                name: "User",
+                value: `${message.author.tag} (<@${userId}>)`,
+                inline: true,
+              },
               { name: "Violation", value: violation, inline: true },
-              { name: "Warnings", value: `${count}/${WARNING_THRESHOLD}`, inline: true },
-              { name: "Channel", value: `<#${message.channelId}>`, inline: true },
-              { name: "Action", value: timedOut ? "10-minute timeout applied" : "Warning issued, message deleted", inline: true }
+              {
+                name: "Warnings",
+                value: `${count}/${WARNING_THRESHOLD}`,
+                inline: true,
+              },
+              {
+                name: "Channel",
+                value: `<#${message.channelId}>`,
+                inline: true,
+              },
+              {
+                name: "Action",
+                value: timedOut
+                  ? "10-minute timeout applied"
+                  : "Warning issued, message deleted",
+                inline: true,
+              },
             )
             .setTimestamp();
           await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
@@ -109,7 +139,8 @@ export default {
       !message.content.startsWith("@everyone") &&
       !message.content.startsWith("@here");
 
-    const inBotChannel = guildConfig?.botChannelIds?.includes(message.channelId) ?? false;
+    const inBotChannel =
+      guildConfig?.botChannelIds?.includes(message.channelId) ?? false;
 
     if (!mentioned && !inBotChannel) return;
 
@@ -137,12 +168,19 @@ export default {
 
       await message.reply({ embeds: [embed] });
     } catch (err) {
-      console.error("[messageCreate:conversation]", err);
+      console.error(
+        "[messageCreate:conversation]",
+        getGroqErrorLogContext(err),
+      );
       // Don't send an error embed for unprompted bot-channel messages — too noisy
       if (mentioned) {
-        await message.reply({
-          embeds: [createEmbed("—", "Something went wrong. Try again in a moment.")],
-        }).catch(() => {});
+        await message
+          .reply({
+            embeds: [
+              createEmbed("—", "Something went wrong. Try again in a moment."),
+            ],
+          })
+          .catch(() => {});
       }
     }
   },
