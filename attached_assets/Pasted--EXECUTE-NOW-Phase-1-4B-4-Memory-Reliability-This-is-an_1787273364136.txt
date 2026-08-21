@@ -1,0 +1,112 @@
+# EXECUTE NOW — Phase 1.4B.4 Memory Reliability
+
+This is an ACTIVE IMPLEMENTATION REQUEST.
+
+You are authorized to modify the current Assistant-Beta-2.5 repository.
+
+Do NOT treat this as a review request, planning request, setup request, or reference-only document.
+
+Inspect → implement → test → verify → report.
+
+The repository already contains completed and committed:
+
+- Phase 1.4B.1 — Shared Groq Reliability Layer
+- Phase 1.4B.2 — Conversation Reliability & Concurrency
+- Phase 1.4B.3 — Empty Response & Persistence Reliability
+
+Preserve all three.
+
+---
+
+# OBJECTIVE
+
+Implement:
+
+> Phase 1.4B.4 — Memory Reliability
+
+The goal is to make the background memory-extraction pipeline reliable, bounded, observable, and safe without allowing memory failures to affect the primary AI response.
+
+The central rule is:
+
+MEMORY EXTRACTION IS NON-CRITICAL.
+
+A successful conversation response must remain successful even if:
+
+- memory extraction fails
+- memory parsing fails
+- memory validation fails
+- memory persistence fails
+- the memory request times out
+- the memory request is rate-limited
+- the memory request returns malformed output
+
+---
+
+# FIRST: INSPECT THE CURRENT REPOSITORY
+
+Before editing, inspect the actual current implementation.
+
+Pay particular attention to:
+
+- `artifacts/discord-bot/src/utils/conversation.ts`
+- `artifacts/discord-bot/src/utils/groq.ts`
+- memory extraction implementation
+- `db.getMemories()`
+- `db.addMemories()`
+- memory-related database schema/migrations
+- existing memory tests
+- B1 reliability tests
+- B2 conversation queue tests
+- B3 response/persistence tests
+- current Git status
+
+The repository is the source of truth.
+
+Do not assume the architecture from previous reports.
+
+---
+
+# EXISTING PHASES MUST REMAIN INTACT
+
+## B1
+
+Preserve the shared Groq reliability layer:
+
+- centralized Groq requests
+- explicit timeout handling
+- application-owned retries
+- disabled SDK retries
+- typed reliability errors
+- safe structured logging
+
+Do not redesign it.
+
+Use the existing shared Groq boundary for memory extraction rather than creating another raw Groq request path.
+
+---
+
+## B2
+
+Preserve the per-conversation queue.
+
+Do not introduce:
+
+- a global lock
+- a second conversation queue
+- unnecessary synchronization around background memory extraction
+
+Memory extraction must not block unrelated conversations.
+
+---
+
+## B3
+
+Preserve the current response contract and behavior:
+
+```ts
+{
+  text: string;
+  botName: string;
+  personaLabel?: string;
+  persisted: boolean;
+}
