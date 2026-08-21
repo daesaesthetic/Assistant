@@ -1,19 +1,23 @@
 /**
  * Builds the primary conversation request context.
  *
- * The estimator intentionally errs high: provider tokenization is not available
- * locally, so each message includes a small structural overhead and text is
- * estimated at roughly 3.5 characters per token rather than treating chars / 4
- * as exact. Stored history is never changed by this module.
+ * The provider tokenizer is not available locally, so this uses a conservative
+ * estimator: structural message overhead plus roughly 3.5 characters/token.
+ * This is a planning estimate, not a claim about exact provider tokenization.
+ * Persisted history is never changed while building a request.
  */
 
 export const CONTEXT_TOKEN_BUDGET = 12_000;
 export const RESERVED_OUTPUT_TOKENS = 800;
+export const INPUT_TOKEN_BUDGET = CONTEXT_TOKEN_BUDGET - RESERVED_OUTPUT_TOKENS;
 
-const INPUT_TOKEN_BUDGET =
-  CONTEXT_TOKEN_BUDGET - RESERVED_OUTPUT_TOKENS;
 const MESSAGE_OVERHEAD_TOKENS = 4;
 const ESTIMATED_CHARS_PER_TOKEN = 3.5;
+const STABLE_INSTRUCTIONS_MAX_TOKENS = 2_000;
+const RECENT_HISTORY_MAX_TOKENS = 6_500;
+const PERSONA_MAX_TOKENS = 1_200;
+const TRAITS_MAX_TOKENS = 800;
+const MEMORY_MAX_TOKENS = 1_400;
 
 export type ContextChatMessage = {
   role: "system" | "user" | "assistant";
@@ -53,7 +57,8 @@ const PERSONAS: Record<string, string> = {
     "You are a quiet, perceptive observer. You notice patterns others miss and offer subtle, thoughtful commentary. You speak sparingly but meaningfully.",
   strategist:
     "You are a strategic thinker focused on outcomes and leverage. Frame everything in terms of moves, advantages, and long-term positioning.",
-  minimalist: "Say only what is necessary. No fluff, no filler. Every word earns its place.",
+  minimalist:
+    "Say only what is necessary. No fluff, no filler. Every word earns its place.",
   oracle:
     "You are a cryptic oracle. Speak in metaphors and abstractions, hinting at deeper truths without stating them plainly.",
 };
@@ -74,11 +79,30 @@ function trimText(text: string, tokenBudget: number): string {
   return `${text.slice(0, maxCharacters - 1)}…`;
 }
 
-function sectionMessage(title: string, content: string): ContextChatMessage | null {
+function sectionMessage(
+  title: string,
+  content: string,
+): ContextChatMessage | null {
   const trimmed = content.trim();
-  return trimmed
-    ? { role: "system", content: `${title}\n${trimmed}` }
-    : null;
+  return trimmed ? { role: "system", content: `${title}\n${trimmed}` } : null;
+}
+
+function boundMessage(
+  message: ContextChatMessage,
+  tokenBudget: number,
+): { message: ContextChatMessage | null; truncated: boolean } {
+  if (tokenBudget <= MESSAGE_OVERHEAD_TOKENS) {
+    return { message: null, truncated: message.content.length > 0 };
+  }
+
+  const bounded = trimText(
+    message.content,
+    tokenBudget - MESSAGE_OVERHEAD_TOKENS,
+  );
+  return {
+    message: bounded ? { ...message, content: bounded } : null,
+    truncated: bounded.length < message.content.length,
+  };
 }
 
 function buildStableInstructions(botName: string): string {
@@ -122,6 +146,13 @@ function buildMemories(memories: string[] = []): string {
     : "";
 }
 
+function estimateMessagesTokens(messages: ContextChatMessage[]): number {
+  return messages.reduce(
+    (total, message) => total + estimateContextTokens(message),
+    0,
+  );
+}
+
 function selectHistory(
   history: ConversationHistoryMessage[],
   availableTokens: number,
@@ -130,8 +161,10 @@ function selectHistory(
   let remaining = availableTokens;
   let truncated = false;
 
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const message = history[index];
+  const validHistory = history.filter((message) => message.content.trim());
+
+  for (let index = validHistory.length - 1; index >= 0; index -= 1) {
+    const message = validHistory[index];
     const full = { role: message.role, content: message.content };
     const cost = estimateContextTokens(full);
     if (cost <= remaining) {
@@ -147,78 +180,88 @@ function selectHistory(
     break;
   }
 
-  if (selected.length < history.length) truncated = true;
+  if (
+    selected.length < validHistory.length ||
+    validHistory.length < history.length
+  ) {
+    truncated = true;
+  }
   return { messages: selected, truncated };
 }
 
 export function buildConversationContext(
   input: ConversationContextInput,
 ): ConversationContextResult {
-  const rawCurrentMessage: ContextChatMessage = {
+  // The current message is intentionally never bounded or removed. If it is
+  // larger than the provider budget by itself, the result reports that fact
+  // and omits optional context rather than silently changing user input.
+  const currentMessage: ContextChatMessage = {
     role: "user",
     content: input.currentMessage,
   };
-  const currentMessage: ContextChatMessage = {
-    ...rawCurrentMessage,
-    content: trimText(
-      rawCurrentMessage.content,
-      Math.max(0, INPUT_TOKEN_BUDGET - MESSAGE_OVERHEAD_TOKENS),
-    ),
-  };
   const currentCost = estimateContextTokens(currentMessage);
-  const optionalBudget = Math.max(0, INPUT_TOKEN_BUDGET - currentCost);
+  let remaining = Math.max(0, INPUT_TOKEN_BUDGET - currentCost);
 
-  const stable = sectionMessage("Stable instructions:", buildStableInstructions(input.botName));
+  const stable = sectionMessage(
+    "Stable instructions:",
+    buildStableInstructions(input.botName),
+  );
   const persona = sectionMessage("Persona:", buildPersona(input.persona));
   const traits = sectionMessage("Traits:", buildTraits(input.traits));
-  const memories = sectionMessage("Memory context:", buildMemories(input.memories));
-  const optionalSections = [persona, traits, memories].filter(
-    (message): message is ContextChatMessage => message !== null,
+  const memories = sectionMessage(
+    "Memory context:",
+    buildMemories(input.memories),
   );
-
-  // Stable instructions are protected first. Recent history gets the next
-  // available capacity; lower-priority optional sections use what remains.
-  let remaining = optionalBudget;
-  const boundedSections: ContextChatMessage[] = [];
   let truncatedContext = false;
+  const boundedStable: ContextChatMessage[] = [];
 
   if (stable) {
-    const bounded = trimText(stable.content, Math.floor(optionalBudget * 0.62));
-    if (bounded.length < stable.content.length) truncatedContext = true;
-    if (bounded) {
-      boundedSections.push({ ...stable, content: bounded });
-      remaining -= estimateContextTokens({ ...stable, content: bounded });
+    const bounded = boundMessage(
+      stable,
+      Math.min(remaining, STABLE_INSTRUCTIONS_MAX_TOKENS),
+    );
+    if (bounded.message) {
+      boundedStable.push(bounded.message);
+      remaining -= estimateContextTokens(bounded.message);
     }
+    truncatedContext ||= bounded.truncated;
   }
 
-  const historyResult = selectHistory(input.history, remaining);
+  // Allocation follows the reduction priority: stable instructions, newest
+  // history, then persona, traits, and memory. Final message ordering remains
+  // stable/persona/traits/memory/history/current for prompt compatibility.
+  const historyResult = selectHistory(
+    input.history,
+    Math.min(remaining, RECENT_HISTORY_MAX_TOKENS),
+  );
   remaining -= historyResult.messages.reduce(
     (total, message) => total + estimateContextTokens({ ...message }),
     0,
   );
 
-  optionalSections.forEach((section, index) => {
-    const allocation = Math.floor(optionalBudget * [0.16, 0.12, 0.1][index]);
-    const budget = Math.min(remaining, allocation);
-    const bounded = trimText(section.content, budget);
-    if (bounded.length < section.content.length) truncatedContext = true;
-    if (bounded) {
-      boundedSections.push({ ...section, content: bounded });
-      remaining -= estimateContextTokens({ ...section, content: bounded });
+  const optionalSections = [
+    [persona, PERSONA_MAX_TOKENS],
+    [traits, TRAITS_MAX_TOKENS],
+    [memories, MEMORY_MAX_TOKENS],
+  ] as const;
+  const boundedOptional: ContextChatMessage[] = [];
+  for (const [section, allocation] of optionalSections) {
+    if (!section) continue;
+    const bounded = boundMessage(section, Math.min(remaining, allocation));
+    if (bounded.message) {
+      boundedOptional.push(bounded.message);
+      remaining -= estimateContextTokens(bounded.message);
     }
-  });
+    truncatedContext ||= bounded.truncated;
+  }
 
-  const orderedOptional = boundedSections.filter((message) => message !== stable);
   const messages = [
-    ...(stable && boundedSections.includes(stable) ? [boundedSections[0]] : []),
-    ...orderedOptional,
+    ...boundedStable,
+    ...boundedOptional,
     ...historyResult.messages,
     currentMessage,
   ];
-  const estimatedInputTokens = messages.reduce(
-    (total, message) => total + estimateContextTokens(message),
-    0,
-  );
+  const estimatedInputTokens = estimateMessagesTokens(messages);
 
   return {
     messages,
@@ -229,7 +272,6 @@ export function buildConversationContext(
     truncatedContext:
       truncatedContext ||
       historyResult.truncated ||
-      currentMessage.content.length < input.currentMessage.length ||
       estimatedInputTokens + RESERVED_OUTPUT_TOKENS > CONTEXT_TOKEN_BUDGET,
   };
 }
