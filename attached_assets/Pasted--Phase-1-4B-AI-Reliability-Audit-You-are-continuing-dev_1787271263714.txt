@@ -1,0 +1,170 @@
+# Phase 1.4B — AI Reliability Audit
+
+You are continuing development of Assistant-Beta-2.5.
+
+The project has completed the Phase 1.3 AI Context & Conversation Reliability Audit and is now beginning Phase 1.4.
+
+The current repository is the committed project baseline. This task is **READ-ONLY**.
+
+Do not modify source files, database schemas, migrations, dependencies, prompts, model settings, workflows, deployment configuration, or other project behavior.
+
+## Objective
+
+Audit the application's AI/Groq request reliability and determine exactly what should be improved in Track B — AI Reliability.
+
+## Inspect
+
+Trace the complete AI request path, including:
+
+* `generateReply()`
+* Groq client initialization
+* Model configuration
+* `/talk`
+* Automatic mention responses
+* Error propagation
+* Background memory extraction
+* Any shared AI utilities
+* Relevant environment/configuration handling
+
+Determine the current behavior for:
+
+1. API failures
+2. Network failures
+3. Request timeouts
+4. Rate limits
+5. Context-size failures
+6. Authentication/configuration failures
+7. Empty model responses
+8. Malformed/unexpected SDK responses
+9. Memory-extraction failures
+10. Database failures after an AI response
+11. Concurrent AI requests
+12. Retry behavior
+13. Backoff behavior
+14. User-facing error handling
+15. Developer-facing logging
+
+## Specifically determine
+
+### Timeout behavior
+
+Identify whether the application has an explicit AI request timeout.
+
+If not, determine where the timeout should eventually be implemented and whether the current SDK supports it.
+
+### Retry behavior
+
+Determine whether requests are retried.
+
+If not, identify which failures would be safe to retry and which should never be retried automatically.
+
+### Rate limits
+
+Determine how Groq rate-limit responses are currently surfaced.
+
+Identify whether retry-after information is available and whether it should eventually be respected.
+
+### Context failures
+
+Determine how context-size/model-request failures are detected and handled.
+
+Do not implement token budgeting in this task; that belongs to Track A.
+
+### Empty responses
+
+Verify the current behavior when the model returns no usable text.
+
+Determine whether the existing `"..."` fallback is appropriate and whether it can create undesirable conversation history.
+
+### Error classification
+
+Determine whether the current code distinguishes between transient, permanent, configuration, and application errors.
+
+### Memory extraction
+
+Determine exactly how the asynchronous memory-extraction request behaves when it fails.
+
+Verify that memory extraction failure cannot cause the primary conversation response to fail.
+
+## Cross-project constraints
+
+Follow the Assistant-Beta-2.5 Master Development Prompt.
+
+In particular:
+
+* Preserve existing functionality.
+* Do not perform a rewrite.
+* Do not introduce dependencies during this audit.
+* Do not expose secrets.
+* Do not change database behavior.
+* Do not change prompts or model settings.
+* Do not modify Discord behavior.
+* Prefer resource-efficient solutions.
+* Consider Replit resource usage.
+* Keep the main user response independent from non-critical background work.
+
+## Deliverable
+
+Return a detailed Track B audit containing:
+
+### Current State
+
+Exactly how AI failures currently behave.
+
+### Reliability Risks
+
+Rank identified issues as:
+
+* Critical
+* High
+* Medium
+* Low
+
+### Recommended Changes
+
+For each issue, explain the smallest reasonable fix.
+
+### Retry Matrix
+
+Create a table containing:
+
+| Failure | Retry? | Reason | Suggested behavior |
+| ------- | ------ | ------ | ------------------ |
+
+### Timeout Recommendation
+
+Recommend an appropriate application-level timeout strategy.
+
+### Error Handling Recommendation
+
+Describe the desired error classification and user-facing behavior.
+
+### Implementation Order
+
+Give the recommended order for implementing the Track B fixes.
+
+### Files Affected
+
+List files that would likely need modification.
+
+### Files That Should Remain Untouched
+
+Identify important areas that should not be changed for Track B.
+
+### Regression Risks
+
+Identify anything that could break existing behavior.
+
+### Verification Plan
+
+Provide tests for every recommended reliability change.
+
+## Completion Rule
+
+This task is complete only when the audit is finished.
+
+Do not modify the project during this task.
+
+Do not claim that any reliability issue has been fixed.
+
+The final result should be an implementation-ready Track B plan.
