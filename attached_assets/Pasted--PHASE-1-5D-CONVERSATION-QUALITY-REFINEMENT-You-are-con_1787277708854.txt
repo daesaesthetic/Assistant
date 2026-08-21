@@ -1,0 +1,297 @@
+# PHASE 1.5D — CONVERSATION QUALITY REFINEMENT
+
+You are continuing development of the Assistant Discord bot.
+
+This is a focused behavioral refinement phase.
+
+The bot has already completed:
+
+- Phase 1.4B.1 — Shared Groq Reliability
+- Phase 1.4B.2 — Conversation Concurrency
+- Phase 1.4B.3 — Primary Response Validation
+- Phase 1.4B.4 — Memory Reliability
+- Phase 1.4B.5 — Caller-Level AI Error Handling
+- Phase 1.5A — Context Boundary
+- Phase 1.5B — Context Budgeting
+- Phase 1.5C — Context Relevance & Memory Intelligence
+
+The current implementation is considered structurally reliable.
+
+DO NOT redesign the architecture.
+
+DO NOT add new dependencies.
+
+DO NOT introduce a new database system.
+
+DO NOT introduce embeddings, vector search, RAG infrastructure, conversation summarization, distributed locking, analytics infrastructure, or additional AI calls unless the existing implementation absolutely requires one for correctness.
+
+The purpose of this phase is to improve the assistant's actual conversational behavior using the existing context pipeline.
+
+---
+
+## OBJECTIVE
+
+Audit the current conversation prompt/context construction and improve the weakest behavioral areas.
+
+Focus on:
+
+1. Natural conversation
+2. Context continuity
+3. Appropriate use of memories
+4. Persona consistency
+5. Avoiding repetitive or robotic responses
+6. Avoiding unnecessary references to stored memories
+7. Avoiding hallucinated personal knowledge
+8. Maintaining appropriate answer length
+9. Handling follow-up questions naturally
+10. Preventing the assistant from sounding like it is reading from a database
+
+The assistant should feel like a coherent conversational entity rather than a system assembling context fragments.
+
+---
+
+## REQUIRED APPROACH
+
+First inspect the current implementation.
+
+Identify:
+
+- The current system prompt
+- Persona instructions
+- Trait formatting
+- Memory formatting
+- Context assembly order
+- Recent conversation handling
+- Current message placement
+- Existing response-length instructions
+- Any duplicated or conflicting instructions
+
+Do not modify anything until the current behavior is understood.
+
+Then make the smallest reasonable changes needed to improve conversational quality.
+
+---
+
+## BEHAVIORAL REQUIREMENTS
+
+### 1. Natural context usage
+
+The assistant should use relevant memories naturally.
+
+It should NOT say things such as:
+
+- "According to my memories..."
+- "I remember from my stored memory..."
+- "My memory database says..."
+- "You previously told me..."
+
+unless referring naturally to an actual conversational recollection is appropriate.
+
+Memories are internal context, not user-visible system mechanics.
+
+---
+
+### 2. No forced memory references
+
+A relevant memory does not need to be mentioned in every response.
+
+The model should only use a memory when it materially improves the answer.
+
+Irrelevant memories should be ignored.
+
+---
+
+### 3. Conversation continuity
+
+Follow-up messages should be interpreted in the context of recent conversation.
+
+For example:
+
+User:
+"I bought a new PC."
+
+Assistant:
+"Nice. What specs did you go with?"
+
+User:
+"32GB."
+
+The assistant should understand that "32GB" refers to the PC rather than treating it as an isolated statement.
+
+Do not add another persistence mechanism to accomplish this. Use the existing history/context architecture.
+
+---
+
+### 4. Persona consistency
+
+Built-in and custom personas should influence:
+
+- Tone
+- Word choice
+- Response structure
+- Degree of formality
+- Conversational attitude
+
+They should NOT override core safety, reliability, or factual behavior.
+
+Avoid making personas excessively theatrical unless the persona explicitly calls for it.
+
+---
+
+### 5. Traits
+
+Traits should influence behavior subtly.
+
+Traits should not be repeatedly announced or explicitly referenced.
+
+Avoid:
+
+"You like X, so..."
+
+when simply responding naturally would be better.
+
+---
+
+### 6. Avoid robotic repetition
+
+Reduce tendencies such as:
+
+- Repeated greetings
+- Repeated "Absolutely!"
+- Repeated "Sure!"
+- Repeated summaries of what the user just said
+- Repeated offers to help
+- Repeated use of the user's name
+- Formulaic conclusions
+
+The assistant should vary naturally while remaining coherent.
+
+---
+
+### 7. Response length
+
+Responses should be proportional to the user's request.
+
+Simple questions should receive concise answers.
+
+Complex questions can receive structured explanations.
+
+Do not force every response to use:
+
+- Headings
+- Bullet points
+- Long explanations
+- Conclusions
+- Follow-up questions
+
+Use structure only when useful.
+
+---
+
+### 8. Do not fabricate memory
+
+The assistant must never imply that it remembers something unless that information is actually available through:
+
+- Current conversation history
+- Relevant stored memory
+- Explicit persona/trait context
+
+When uncertain, it should acknowledge uncertainty naturally.
+
+---
+
+### 9. Current message priority
+
+The current user request should remain the primary focus.
+
+Memories, traits, persona, and older history are supporting context.
+
+Do not allow an unrelated memory to hijack the response.
+
+---
+
+### 10. Preserve the existing reliability architecture
+
+Do not alter:
+
+- B1 Groq reliability
+- B2 conversation queue
+- B3 response validation
+- B4 memory extraction reliability
+- B5 error handling
+- 1.5A context boundary
+- 1.5B context budgeting
+- 1.5C memory relevance selection
+
+unless a minimal compatibility adjustment is strictly required.
+
+If such a change is required, document it explicitly.
+
+---
+
+## TESTING
+
+Add focused tests only where they provide meaningful protection.
+
+At minimum verify:
+
+- Relevant memories remain usable.
+- Irrelevant memories do not dominate responses.
+- Persona instructions remain present.
+- Traits remain present.
+- Current message remains present.
+- Recent conversation remains present.
+- Context ordering remains correct.
+- No duplicated context sections are introduced.
+- Existing B1–B5 and 1.5A–1.5C tests continue passing.
+
+Do not create a large test framework for prompt behavior.
+
+---
+
+## VERIFICATION
+
+Run:
+
+- Discord bot tests
+- Workspace tests if applicable
+- Bot typecheck
+- Workspace typecheck
+- Prettier on changed files
+- `git diff --check`
+
+Do not start the Discord workflow unless explicitly requested.
+
+Do not require Discord/Groq credentials for this phase.
+
+---
+
+## SCOPE CONTROL
+
+This phase is intentionally small.
+
+If you discover a larger architectural improvement, DO NOT implement it.
+
+Record it under:
+
+### Deferred Improvements
+
+and explain why it should wait until after real-world testing.
+
+---
+
+## FINAL REPORT
+
+Return:
+
+1. Files changed
+2. Behavioral improvements
+3. Tests added/updated
+4. Verification results
+5. Confirmation that B1–B5 and 1.5A–1.5C remain intact
+6. Deferred improvements, if any
+7. Whether the project is ready for Phase 1.5E
+
+Do not claim success unless verification actually passes.
+
+No unrelated files or configuration should be modified.

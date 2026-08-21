@@ -44,6 +44,18 @@ test("builds sections in stable prompt order and skips empty optional sections",
   assert.match(result.messages[1].content, /^Persona:/);
   assert.match(result.messages[2].content, /^Traits:/);
   assert.match(result.messages[3].content, /^Memory context:/);
+  assert.match(
+    result.messages[0].content,
+    /follow-up messages and resolve short or elliptical replies in context/,
+  );
+  assert.match(
+    result.messages[0].content,
+    /Use personal context silently and only when it materially improves the answer/,
+  );
+  assert.match(
+    result.messages[3].content,
+    /^Memory context:\nRelevant personal context/,
+  );
   assert.equal(result.messages.at(-1)?.content, "hello");
   assert.equal(result.truncatedContext, false);
   assert.equal(result.optionalContextTruncated, false);
