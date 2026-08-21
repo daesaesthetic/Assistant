@@ -1,0 +1,227 @@
+# PHASE 1.6C — DISCORD DELIVERY DIAGNOSTICS
+
+The bot is online and connected to Discord.
+
+Groq is confirmed working through the existing B1 reliability layer.
+
+The current blocker is specifically Discord response delivery.
+
+A runtime log has captured:
+
+[/talk] {
+  operation: 'discord_delivery',
+  category: 'delivery'
+}
+
+The current B5 error handling intentionally suppresses the underlying Discord exception, so the actual Discord failure reason is currently unknown.
+
+Your task is to diagnose this specific delivery failure.
+
+--------------------------------------------------
+STRICT SCOPE
+--------------------------------------------------
+
+Do NOT:
+
+- redesign the bot
+- modify B1 reliability
+- modify B2 conversation locking
+- modify B3 persistence behavior
+- modify B4 memory architecture
+- modify B5 error classification architecture
+- change prompts
+- change models
+- change database schema
+- add retries
+- add dependencies
+- begin another feature phase
+
+Only investigate the Discord delivery path.
+
+--------------------------------------------------
+STEP 1 — TRACE /talk
+--------------------------------------------------
+
+Trace the complete `/talk` execution path:
+
+Discord interaction
+→ deferReply()
+→ generateReply()
+→ Groq
+→ response validation
+→ persistence
+→ return value
+→ Discord editReply()/followUp/reply
+
+Determine exactly which operation produces:
+
+operation: discord_delivery
+category: delivery
+
+Do not assume the failure is `editReply()` until verified.
+
+--------------------------------------------------
+STEP 2 — TEMPORARY SAFE DIAGNOSTICS
+--------------------------------------------------
+
+Add the smallest possible diagnostic improvement so the underlying Discord delivery error can be identified.
+
+The diagnostic MUST NOT expose:
+
+- bot token
+- Groq API key
+- prompts
+- conversation contents
+- memory contents
+- credentials
+- full user data
+
+Log only safe metadata such as:
+
+- operation
+- Discord error name/code if available
+- HTTP status if available
+- Discord API error code if available
+- whether the interaction was deferred
+- whether it was already replied to
+- response character length
+- elapsed time
+- relevant interaction/command name
+
+If the Discord library exposes structured error fields, use those instead of dumping the complete exception.
+
+Do NOT permanently weaken the existing B5 safety boundary.
+
+--------------------------------------------------
+STEP 3 — REPRODUCE ONE /talk
+--------------------------------------------------
+
+After the diagnostic change:
+
+1. Restart the bot.
+2. Execute exactly one `/talk` in the test server.
+3. Capture the resulting diagnostic information.
+4. Identify the exact Discord failure.
+
+Do not spam commands.
+
+--------------------------------------------------
+STEP 4 — CLASSIFY THE FAILURE
+--------------------------------------------------
+
+Determine whether the cause is:
+
+A. Interaction already acknowledged
+B. Interaction expired
+C. Invalid response payload
+D. Empty response
+E. Discord API permission failure
+F. Discord API HTTP error
+G. Invalid embed/content
+H. Interaction state/race
+I. Bot permissions
+J. Channel permissions
+K. Other
+
+Do not modify code until the actual cause is established.
+
+--------------------------------------------------
+STEP 5 — APPLY THE SMALLEST FIX
+--------------------------------------------------
+
+If the cause is a code defect:
+
+Apply the smallest direct fix.
+
+Examples:
+
+- incorrect interaction response method
+- attempting to reply after defer incorrectly
+- invalid response payload
+- response state handling bug
+- error handler itself failing
+
+If the cause is configuration or Discord permissions:
+
+DO NOT rewrite code.
+
+Report the exact required Discord configuration change.
+
+If the cause is an external Discord/API issue:
+
+Report it without inventing a code fix.
+
+--------------------------------------------------
+STEP 6 — REMOVE OR SANITIZE TEMPORARY DIAGNOSTICS
+--------------------------------------------------
+
+After the root cause is established and fixed:
+
+Keep only diagnostic information that is genuinely useful for ongoing production operation.
+
+Remove temporary debugging that is no longer necessary.
+
+B5 must continue to prevent raw Discord/provider/database errors from reaching users.
+
+--------------------------------------------------
+STEP 7 — REGRESSION TEST
+--------------------------------------------------
+
+Run:
+
+- Discord bot tests
+- Discord bot typecheck
+- Workspace typecheck if applicable
+- Prettier on changed files
+- git diff --check
+
+Then perform one fresh `/talk` interaction.
+
+The interaction must actually produce a visible Discord response before declaring success.
+
+--------------------------------------------------
+FINAL REPORT
+--------------------------------------------------
+
+Return:
+
+### Root Cause
+Exact cause of the Discord delivery failure.
+
+### Evidence
+Relevant safe diagnostic information.
+
+### Fix
+Exact change made, or exact configuration change required.
+
+### Verification
+
+- `/talk`
+- `/talk reset`
+- Bot connection
+- Tests
+- Typechecks
+- Formatting
+- git diff --check
+
+Only test `/talk reset` after `/talk` itself successfully delivers.
+
+### Final Status
+
+Use exactly:
+
+DISCORD DELIVERY FIXED
+
+or
+
+DISCORD CONFIGURATION BLOCKER
+
+or
+
+DISCORD EXTERNAL/API BLOCKER
+
+or
+
+STILL BLOCKED — ROOT CAUSE UNKNOWN
+
+Do not claim success without a visible Discord response.

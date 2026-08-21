@@ -7,6 +7,25 @@ import {
 } from "../utils/ai-errors.js";
 import type { Command } from "../types.js";
 
+function getDiscordDeliveryMetadata(error: unknown): Record<string, unknown> {
+  if (typeof error !== "object" || error === null) return {};
+  const value = error as Record<string, unknown>;
+  const rawError =
+    typeof value.rawError === "object" && value.rawError !== null
+      ? (value.rawError as Record<string, unknown>)
+      : undefined;
+  return {
+    ...(typeof value.name === "string" ? { errorName: value.name } : {}),
+    ...(typeof value.code === "string" || typeof value.code === "number"
+      ? { errorCode: value.code }
+      : {}),
+    ...(typeof value.status === "number" ? { httpStatus: value.status } : {}),
+    ...(typeof rawError?.code === "number"
+      ? { discordApiCode: rawError.code }
+      : {}),
+  };
+}
+
 export default {
   data: new SlashCommandBuilder()
     .setName("talk")
@@ -24,12 +43,19 @@ export default {
     ),
   cooldown: 5,
   async execute(interaction: ChatInputCommandInteraction) {
+    const startedAt = Date.now();
     try {
       await interaction.deferReply();
-    } catch {
+    } catch (error) {
       console.error("[/talk]", {
         operation: "discord_delivery",
         category: "delivery",
+        stage: "deferReply",
+        commandName: interaction.commandName,
+        deferred: interaction.deferred,
+        replied: interaction.replied,
+        elapsedMs: Date.now() - startedAt,
+        ...getDiscordDeliveryMetadata(error),
       });
       return;
     }
@@ -53,10 +79,17 @@ export default {
         await interaction.editReply({
           embeds: [createErrorEmbed(getAiUserFacingMessage(err))],
         });
-      } catch {
+      } catch (error) {
         console.error("[/talk]", {
           operation: "discord_delivery",
           category: "delivery",
+          stage: "editReply:error",
+          commandName: interaction.commandName,
+          deferred: interaction.deferred,
+          replied: interaction.replied,
+          responseLength: getAiUserFacingMessage(err).length,
+          elapsedMs: Date.now() - startedAt,
+          ...getDiscordDeliveryMetadata(error),
         });
       }
       return;
@@ -72,10 +105,17 @@ export default {
 
     try {
       await interaction.editReply({ embeds: [embed] });
-    } catch {
+    } catch (error) {
       console.error("[/talk]", {
         operation: "discord_delivery",
         category: "delivery",
+        stage: "editReply:success",
+        commandName: interaction.commandName,
+        deferred: interaction.deferred,
+        replied: interaction.replied,
+        responseLength: result.text.length,
+        elapsedMs: Date.now() - startedAt,
+        ...getDiscordDeliveryMetadata(error),
       });
     }
   },
