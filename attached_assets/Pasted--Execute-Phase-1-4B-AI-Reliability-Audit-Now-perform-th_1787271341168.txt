@@ -1,0 +1,222 @@
+# Execute Phase 1.4B — AI Reliability Audit
+
+Now perform the previously defined **Phase 1.4B — AI Reliability Audit** on the current imported Assistant-Beta-2.5 repository.
+
+This is an **active read-only audit**, not a setup task.
+
+## Important
+
+Do NOT modify anything.
+
+Do NOT:
+
+* edit source files
+* create files
+* delete files
+* modify the database
+* modify migrations
+* modify dependencies
+* modify prompts
+* modify model settings
+* modify environment variables
+* modify Replit configuration
+* modify workflows
+* commit changes
+* deploy changes
+
+You have permission to **inspect and analyze the existing repository only**.
+
+## Objective
+
+Trace the complete AI request and failure-handling pipeline and produce an implementation-ready Track B audit.
+
+Inspect the actual current code rather than relying on the previous Phase 1.3 report.
+
+At minimum, locate and inspect:
+
+* the shared conversation/AI generation logic
+* Groq client configuration
+* `/talk`
+* automatic mention handling
+* memory extraction
+* error handling
+* relevant database persistence behavior
+* configuration/environment handling
+* any shared AI utilities
+
+## Analyze
+
+Determine the exact current behavior for:
+
+1. Successful AI requests
+2. Groq API failures
+3. Network failures
+4. Request timeouts
+5. Rate limits
+6. Context-size failures
+7. Authentication/configuration failures
+8. Empty model responses
+9. Malformed/unexpected model responses
+10. Memory extraction failures
+11. Persistence failures after successful generation
+12. Concurrent AI requests
+13. Retries
+14. Backoff
+15. Logging
+16. User-facing error messages
+
+## Pay special attention to
+
+### Timeout
+
+Determine whether an explicit timeout exists.
+
+If none exists:
+
+* identify where it should be introduced
+* identify whether the existing Groq SDK supports it
+* recommend a reasonable strategy
+
+### Retry
+
+Determine whether retries currently exist.
+
+Create a recommendation for which failures should be retried and which should not.
+
+Do not implement retries during this audit.
+
+### Rate limits
+
+Determine exactly how rate-limit responses currently propagate.
+
+If retry-after information is available, document how it could eventually be used.
+
+### Context failures
+
+Determine how context-size/request-size failures currently behave.
+
+Do not implement Track A token budgeting.
+
+### Empty responses
+
+Verify the exact fallback behavior and whether an empty response can create undesirable conversation history.
+
+### Error classification
+
+Determine whether the current implementation distinguishes between:
+
+* transient failures
+* permanent failures
+* configuration failures
+* rate limits
+* application/database failures
+
+### Background memory extraction
+
+Trace the secondary memory-extraction request.
+
+Confirm whether:
+
+* it can block the primary response
+* it can cause the primary request to fail
+* its errors are logged
+* its errors are silently ignored
+* it can leave partial state
+
+## Output
+
+Return the following sections:
+
+### 1. Current AI Request Flow
+
+Describe the actual implementation found in the repository.
+
+### 2. Current Failure Behavior
+
+Provide a table:
+
+| Failure | Current behavior | User impact | Data impact |
+| ------- | ---------------- | ----------- | ----------- |
+
+### 3. Reliability Findings
+
+Rank every finding:
+
+* 🔴 Critical
+* 🟠 High
+* 🟡 Medium
+* 🟢 Low
+
+Explain why each finding matters.
+
+### 4. Retry Matrix
+
+| Failure | Retry? | Why | Recommended behavior |
+| ------- | ------ | --- | -------------------- |
+
+### 5. Timeout Recommendation
+
+Give a concrete recommended strategy.
+
+### 6. Error Classification
+
+Recommend the smallest practical classification system.
+
+### 7. Recommended Changes
+
+For each proposed change:
+
+* What should change
+* Why
+* Likely file(s)
+* Risk
+* Dependencies
+* Whether it can be implemented independently
+
+### 8. Implementation Order
+
+Separate recommendations into:
+
+**Can be implemented independently**
+
+* ...
+
+**Should be implemented together**
+
+* ...
+
+**Should wait for another Phase 1.4 track**
+
+* ...
+
+### 9. Regression Risks
+
+Identify existing functionality that could be affected.
+
+### 10. Verification Plan
+
+Provide concrete tests for the recommended implementation.
+
+### 11. Final Recommendation
+
+Give a concise recommendation for what we should implement first in Track B.
+
+## Important project constraints
+
+Follow the Assistant-Beta-2.5 Master Development Prompt.
+
+Preserve existing functionality.
+
+Do not perform unrelated refactoring.
+
+Do not introduce dependencies unless the later implementation proves one is necessary.
+
+Do not change the current project during this audit.
+
+## Completion requirement
+
+Do not respond that the task is merely "set up."
+
+Actually inspect the repository and produce the complete audit above.
+
+The expected result is an **implementation-ready Phase 1.4B audit**, with no repository modifications.
