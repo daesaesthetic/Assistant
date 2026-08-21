@@ -7,6 +7,8 @@
  * Persisted history is never changed while building a request.
  */
 
+import { selectRelevantMemories } from "./memory-relevance.js";
+
 export const CONTEXT_TOKEN_BUDGET = 12_000;
 export const RESERVED_OUTPUT_TOKENS = 800;
 export const INPUT_TOKEN_BUDGET = CONTEXT_TOKEN_BUDGET - RESERVED_OUTPUT_TOKENS;
@@ -254,9 +256,13 @@ export function buildConversationContext(
   );
   const persona = sectionMessage("Persona:", buildPersona(input.persona));
   const traits = sectionMessage("Traits:", buildTraits(input.traits));
+  const selectedMemories = selectRelevantMemories(
+    input.memories,
+    input.currentMessage,
+  );
   const memories = sectionMessage(
     "Memory context:",
-    buildMemories(input.memories),
+    buildMemories(selectedMemories),
   );
   let truncatedContext = false;
   let optionalContextTruncated = false;

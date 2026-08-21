@@ -1,0 +1,377 @@
+Phase 1.5C — Context Relevance & Memory Intelligence
+EXECUTION DIRECTIVE
+
+Implement Phase 1.5C — Context Relevance & Memory Intelligence against the current repository.
+
+The current repository is the authoritative baseline. Do not redesign, undo, or duplicate existing Phase 1.4B or Phase 1.5A/1.5B systems.
+
+This is an implementation task, not an audit.
+
+Do not stop after inspection. Inspect only enough to identify the existing interfaces, then implement the scoped changes below.
+
+1. Objective
+
+Improve Azurion's context quality by making persistent memories and contextual information relevance-aware instead of blindly injecting everything into every AI request.
+
+The goal is:
+
+Recent conversation remains the highest-priority context, while only memories relevant to the current request are included when possible.
+
+This phase must improve context efficiency without introducing another AI request into the primary /talk response path.
+
+2. Required Architecture
+
+The existing conversation pipeline remains authoritative:
+
+/talk / mention
+      ↓
+generateReply()
+      ↓
+context loading
+      ↓
+context builder
+      ↓
+B1 Groq reliability boundary
+      ↓
+B3 response validation
+      ↓
+B2 persistence
+      ↓
+B4 background memory extraction
+
+Add relevance selection inside the context-building portion of this pipeline.
+
+Do not bypass:
+
+B1 createGroqCompletion()
+B2 keyed conversation queue
+B3 response validation
+B4 background memory extraction
+B5 centralized AI error handling
+3. Memory Selection
+
+Replace the current behavior of blindly injecting every stored memory with a deterministic relevance filter/ranker.
+
+For each request:
+
+Load the existing user/guild memories.
+Compare them against the current user message.
+Rank memories by relevance.
+Select only the highest-value memories.
+Preserve a hard context-size limit.
+Inject the selected memories into the system/context section.
+Important
+
+Do not call Groq solely to rank memories.
+
+Memory relevance selection must be:
+
+local
+deterministic
+inexpensive
+synchronous with context construction
+independent of provider availability
+
+Do not create a second AI request before the primary response.
+
+4. Relevance Strategy
+
+Use a lightweight lexical/semantic-style heuristic appropriate for the current TypeScript project.
+
+The implementation should consider signals such as:
+
+meaningful word overlap
+normalized terms
+multi-word phrase overlap
+memory specificity
+exact/strong term matches
+current-message relevance
+
+Avoid treating common stopwords as meaningful matches.
+
+A memory with no meaningful relationship to the current request should normally be excluded.
+
+Fallback behavior
+
+If relevance cannot confidently identify useful memories:
+
+retain a small bounded subset of recent/high-value memories rather than injecting all memories.
+
+The assistant must never lose access to all persistent context simply because the relevance heuristic finds no lexical match.
+
+5. Memory Limits
+
+Introduce explicit prompt-level bounds.
+
+The existing database limits remain authoritative.
+
+Do not change:
+
+the 30-memory database limit
+schema
+migrations
+duplicate protection
+existing memory persistence behavior
+
+Add a separate context-selection limit so stored memory count and prompt memory count are independent concepts.
+
+The final context must have a predictable maximum memory contribution.
+
+Keep the implementation configurable through constants rather than scattering magic numbers through the code.
+
+6. Memory Quality
+
+Preserve B4's existing validation rules.
+
+Memory selection must operate only on already-valid stored memories.
+
+Do not weaken:
+
+string validation
+trimming
+empty-value rejection
+placeholder rejection
+500-character memory bound
+duplicate protection
+30-memory storage limit
+
+Do not introduce automatic memory deletion in this phase.
+
+Do not rewrite existing memories merely because they are currently irrelevant.
+
+7. Memory Recency / Importance
+
+Where the existing database information permits it, incorporate memory recency into ranking.
+
+A useful memory should be able to outrank an older irrelevant memory.
+
+However:
+
+Relevance must remain more important than raw recency.
+
+Do not blindly select the newest memories.
+
+Do not introduce a new database schema solely for scoring unless the current implementation makes the required behavior impossible without it.
+
+Prefer deriving the score from existing data.
+
+8. Context Priority
+
+The final AI context should conceptually follow this priority:
+
+1. System identity / safety instructions
+2. Persona
+3. Traits
+4. Relevant memories
+5. Recent conversation
+6. Current user message
+
+The exact existing prompt structure should be preserved unless a small change is required to support bounded memory insertion.
+
+Do not redesign the assistant persona system.
+
+Do not rewrite the system prompt's identity or behavioral instructions.
+
+9. Context Budget
+
+Integrate memory selection with the existing Phase 1.5 context boundary.
+
+The final request must remain bounded.
+
+The implementation must ensure:
+
+Current message is never discarded.
+Recent conversation remains prioritized.
+Memory context is bounded.
+Oversized individual memories cannot bypass the budget.
+Existing context trimming behavior continues to function.
+No unbounded prompt growth is introduced.
+
+Do not replace the existing token estimator with a new provider-specific tokenizer in this phase.
+
+That belongs to a later dedicated context-budgeting phase.
+
+10. Conversation Preservation
+
+Do not alter B2 behavior.
+
+The per-user/guild conversation queue must remain intact.
+
+Do not introduce:
+
+a global AI lock
+a global context lock
+cross-user serialization
+
+Context ranking must be fast enough that it does not materially interfere with the existing queue.
+
+11. Memory Extraction
+
+Do not redesign B4 memory extraction.
+
+It must remain:
+
+background
+best-effort
+independently bounded
+non-critical to the primary response
+
+The new relevance system consumes stored memories; it does not change how new memories are extracted.
+
+Do not make memory extraction awaitable from the primary conversation response.
+
+12. Testing Requirements
+
+Add focused tests for the new relevance system.
+
+At minimum test:
+
+Relevance
+Highly relevant memory ranks first.
+Exact meaningful term matches are recognized.
+Multi-word overlap is recognized.
+Irrelevant memories are excluded.
+Common stopwords do not create false relevance.
+Multiple relevant memories are ranked sensibly.
+Recency / fallback
+Relevant older memory can outrank irrelevant newer memory.
+Recent memories can participate in fallback selection.
+No-match requests still receive a small bounded memory subset.
+Selection never exceeds the configured memory limit.
+Safety
+Empty memory lists work.
+Duplicate memories do not cause unexpected output.
+Very long memories remain bounded by existing B4 validation.
+Current user message is never removed.
+Existing context budget behavior remains intact.
+Regression
+
+The complete existing test suite must continue passing.
+
+Do not delete or weaken existing B1–B5 tests.
+
+13. Files / Scope
+
+Use the existing architecture and modify the smallest reasonable set of files.
+
+Likely areas include:
+
+artifacts/discord-bot/src/utils/conversation.ts
+artifacts/discord-bot/src/utils/
+artifacts/discord-bot/src/database/
+
+Add a dedicated utility/test file if that produces a cleaner separation.
+
+Do not modify database schema or migrations unless absolutely required and explicitly justified.
+
+14. Explicit Non-Goals
+
+Do NOT implement:
+
+AI-powered memory ranking
+embeddings
+vector databases
+semantic-search infrastructure
+new external services
+new runtime dependencies unless absolutely unavoidable
+memory deletion
+automatic memory rewriting
+personality redesign
+prompt/persona redesign
+new Discord commands
+new user-facing configuration
+distributed locking
+multi-process synchronization
+model changes
+new retry systems
+new timeout systems
+changes to B1–B5 reliability ownership
+
+Those belong to later phases.
+
+15. Compatibility Requirements
+
+The implementation must preserve:
+
+B1
+Shared Groq request boundary
+Application-owned retries
+Explicit timeouts
+Error classification
+Safe logging
+B2
+Per-user/guild FIFO conversation queue
+Deterministic reset behavior
+Queue release on failure
+B3
+Primary response validation
+No "..." persistence
+persisted: boolean
+Successful generation remains deliverable after persistence failure
+B4
+Background memory extraction
+Strict memory validation
+500-character memory limit
+30-memory database limit
+Non-critical extraction failures
+B5
+Centralized safe AI error mapping
+No raw provider/database errors to Discord
+No caller-level AI retry
+
+Do not duplicate any of these mechanisms.
+
+16. Verification
+
+Before declaring completion, run:
+
+pnpm --filter @workspace/discord-bot run test
+pnpm --filter @workspace/discord-bot run typecheck
+pnpm run typecheck
+
+Also run the appropriate formatter check and:
+
+git diff --check
+
+Verify that no SQLite runtime artifacts, secrets, workflow configuration, or unrelated files changed.
+
+External Discord/Groq runtime testing is not required if credentials are unavailable.
+
+Do not treat the existing missing DISCORD_BOT_TOKEN limitation as a code failure.
+
+17. Completion Criteria
+
+Phase 1.5C is complete only when:
+
+Memory selection is relevance-aware.
+Selection is deterministic/local and requires no additional AI request.
+Memory contribution is explicitly bounded.
+Relevant memories receive priority over irrelevant memories.
+Recency participates without overriding relevance.
+No-match fallback remains bounded.
+Existing context budgeting remains functional.
+B1–B5 behavior remains intact.
+New relevance tests pass.
+Full existing test suite passes.
+Bot and workspace typechecks pass.
+Formatting passes.
+git diff --check passes.
+No unrelated changes are introduced.
+18. Final Report
+
+At completion, report:
+
+Files changed.
+Relevance algorithm implemented.
+Memory/context limits introduced.
+How recency and fallback work.
+Confirmation that no additional AI request was introduced.
+Confirmation that B1–B5 remain intact.
+Test count and result.
+Typecheck result.
+Formatting/diff result.
+Any limitations or follow-up work.
+
+Do not implement Phase 1.6 or any unrelated improvements.
+
+Do not stop at an audit. Implement Phase 1.5C, verify it, and provide the completion report.
