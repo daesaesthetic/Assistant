@@ -1,0 +1,706 @@
+# Phase 1.4B.2 — Conversation Reliability & Concurrency
+
+You are continuing development of **Assistant-Beta-2.5** in a new coding-agent session.
+
+The previous coding agent completed and verified:
+
+> **Phase 1.4B.1 — Shared Groq Reliability Layer**
+
+The repository contains that implementation already.
+
+Your task is to implement:
+
+> **Phase 1.4B.2 — Conversation Reliability & Concurrency**
+
+This is an implementation task.
+
+---
+
+# IMPORTANT — NEW AGENT CONTEXT
+
+Do not assume you have access to the previous agent's conversation, reasoning, or tool history.
+
+The **repository itself is the source of truth**.
+
+Before making changes, inspect the current repository and verify the existing implementation.
+
+In particular, inspect:
+
+* `artifacts/discord-bot/src/utils/conversation.ts`
+* `artifacts/discord-bot/src/utils/conversation-store.ts`
+* `artifacts/discord-bot/src/database/index.ts`
+* `artifacts/discord-bot/src/commands/talk.ts`
+* `artifacts/discord-bot/src/events/messageCreate.ts`
+* `artifacts/discord-bot/src/utils/groq.ts`
+
+Also inspect the current Git state and package/test configuration.
+
+---
+
+# Existing Phase 1.4 Progress
+
+### B1 — COMPLETE
+
+The previous agent implemented a centralized Groq reliability layer.
+
+It includes:
+
+* `createGroqCompletion`
+* Explicit Groq timeouts
+* Text timeout: 30 seconds
+* Vision timeout: 45 seconds
+* Memory timeout: 15 seconds
+* `maxRetries: 0`
+* One application-owned retry
+* Bounded 429 handling
+* Retry-After handling
+* Typed AI error categories
+* Safe structured logging
+* Missing API-key classification
+* Migration of existing AI callers
+
+Do **not** recreate or redesign B1.
+
+Do not change B1 unless B2 requires a very small compatibility adjustment that is demonstrably necessary.
+
+If you discover a B1 problem, document it and stop before making unrelated changes.
+
+---
+
+# B2 OBJECTIVE
+
+Prevent concurrent conversation requests for the same user/guild context from silently overwriting each other's conversation history.
+
+The current architecture performs a read-modify-generate-write sequence.
+
+Conceptually:
+
+```text
+Request A:
+    read history
+    generate response
+    write complete history
+
+Request B:
+    read history
+    generate response
+    write complete history
+```
+
+If A and B overlap, both can read the same old history.
+
+Whichever request writes last can overwrite the other's conversation exchange.
+
+This is the primary issue B2 must solve.
+
+---
+
+# REQUIRED BEHAVIOR
+
+For a given:
+
+```text
+(userId, guildId)
+```
+
+conversation context:
+
+### Requests must be serialized.
+
+Example:
+
+```text
+Request A starts
+Request B starts
+
+A → read/generate/persist
+A → complete
+
+B → read/generate/persist
+B → complete
+```
+
+B must not generate from the stale history that existed before A completed.
+
+---
+
+# IMPORTANT: DO NOT BLOCK DIFFERENT USERS
+
+Serialization must be scoped to the conversation context.
+
+For example:
+
+```text
+User A + Guild X
+User B + Guild X
+```
+
+must be allowed to process concurrently.
+
+Likewise:
+
+```text
+User A + Guild X
+User A + Guild Y
+```
+
+should remain independent.
+
+The locking/queue key should therefore correspond to the existing conversation scope, not simply the Discord user.
+
+Use the repository's actual existing scope semantics as the source of truth.
+
+---
+
+# DEPLOYMENT ARCHITECTURE
+
+Before choosing the concurrency mechanism, inspect the repository and deployment configuration.
+
+Determine whether the current bot runs as:
+
+* One process
+* Multiple processes
+* Multiple workers
+* Horizontally scaled instances
+
+If the current deployment is effectively a single bot process, an in-memory per-conversation queue/lock is likely the smallest appropriate solution.
+
+If the repository demonstrates that multiple bot processes can simultaneously access the same SQLite database, do NOT blindly implement an in-memory lock.
+
+In that case, evaluate whether optimistic/versioned persistence or another database-level mechanism is required.
+
+Do not assume.
+
+Document the conclusion.
+
+---
+
+# PREFERRED IMPLEMENTATION
+
+Prefer the smallest solution that reliably protects the current architecture.
+
+A likely single-process implementation would be a per-conversation asynchronous queue/lock:
+
+```text
+Map<conversationKey, Promise>
+```
+
+or an equivalent small utility.
+
+The implementation must:
+
+* serialize requests for one conversation
+* allow unrelated conversations to run concurrently
+* release the lock after success
+* release the lock after failure
+* release the lock after timeout
+* avoid permanently orphaned locks
+* avoid unbounded memory growth
+* clean up idle conversation keys
+
+Do not add a general-purpose queue framework.
+
+Do not add a dependency unless absolutely necessary.
+
+---
+
+# CRITICAL: LOCK THE CORRECT BOUNDARY
+
+Do not simply lock the final SQLite write.
+
+That does NOT solve the stale-history problem.
+
+The protected operation must cover the relevant read → generation → persistence sequence.
+
+Conceptually:
+
+```text
+acquire conversation lock
+
+    load current history
+    build context
+    call AI
+    persist resulting history
+
+release conversation lock
+```
+
+This ensures the second request reads the history produced by the first.
+
+However, do not hold a database transaction open while waiting for Groq.
+
+The lock should be application-level around the conversation workflow, while SQLite transactions remain short-lived.
+
+---
+
+# RESET SEMANTICS
+
+This is a required part of B2.
+
+Inspect how `/talk reset` currently works.
+
+Determine what happens when:
+
+```text
+Request A is generating
+Request B requests reset
+```
+
+Define deterministic behavior.
+
+Preferred behavior:
+
+```text
+Existing request completes according to normal rules.
+
+Reset waits for the current conversation operation.
+
+Then reset clears the conversation.
+
+Future requests see the reset state.
+```
+
+Do not allow a stale in-flight request to write history after reset has already cleared it.
+
+If the current architecture requires a different safe solution, explain it before implementing.
+
+---
+
+# AUTOMATIC MENTIONS
+
+Verify that automatic mention responses use the same conversation generation path.
+
+They must participate in the same per-conversation serialization mechanism as `/talk`.
+
+There must not be separate locks for:
+
+```text
+/talk
+```
+
+and:
+
+```text
+messageCreate
+```
+
+if both ultimately modify the same conversation.
+
+Use the shared conversation service boundary.
+
+---
+
+# B1 COMPATIBILITY
+
+The B1 reliability layer now introduces:
+
+* explicit timeouts
+* bounded retries
+* typed AI errors
+
+B2 must correctly handle those outcomes.
+
+For example:
+
+```text
+conversation lock acquired
+    ↓
+Groq request times out
+    ↓
+generateReply fails
+    ↓
+lock is released
+```
+
+A timeout or retry failure must never leave the conversation permanently locked.
+
+Likewise:
+
+```text
+conversation lock acquired
+    ↓
+database persistence fails
+    ↓
+lock is released
+```
+
+---
+
+# FAILURE SAFETY
+
+The concurrency mechanism must be exception-safe.
+
+Use a structure equivalent to:
+
+```text
+acquire
+try:
+    execute conversation workflow
+finally:
+    release
+```
+
+Do not rely on individual success paths to release locks.
+
+Every exit path must release the conversation context.
+
+---
+
+# DO NOT IMPLEMENT B3
+
+Do NOT change the existing empty-response behavior yet.
+
+Specifically, do not redesign:
+
+```text
+"..."
+```
+
+fallback handling.
+
+Do not change:
+
+* empty response persistence
+* malformed response handling
+* response validation
+
+Those belong to:
+
+> **B3 — Empty Response & Persistence Reliability**
+
+If B2 encounters code related to these behaviors, leave it unchanged unless a minimal change is absolutely required for concurrency correctness.
+
+Document any interaction for B3.
+
+---
+
+# DO NOT IMPLEMENT B4
+
+Do not redesign:
+
+* memory extraction
+* memory validation
+* memory persistence
+* memory limits
+* memory extraction logging
+
+Those belong to B4.
+
+The existing background extraction behavior should remain functionally unchanged.
+
+---
+
+# DO NOT IMPLEMENT B5
+
+Do not redesign:
+
+* user-facing AI error messages
+* broader caller architecture
+* Discord UX
+* `/suggest` behavior
+* `/edit` behavior
+* general AI integration
+
+B2 is specifically about conversation concurrency.
+
+---
+
+# DATABASE SAFETY
+
+Do not change:
+
+* database schema
+* migrations
+* table structure
+* stored conversation format
+
+unless inspection proves a database-level concurrency solution is required by the actual deployment architecture.
+
+If a schema change appears necessary:
+
+**STOP and report it before implementing it.**
+
+Do not silently expand B2 into a database migration.
+
+---
+
+# PERFORMANCE REQUIREMENTS
+
+The concurrency mechanism must not serialize the entire bot.
+
+Bad:
+
+```text
+Global AI lock
+    ↓
+Only one AI request anywhere at a time
+```
+
+Good:
+
+```text
+User A / Guild X → locked
+User B / Guild X → independent
+User A / Guild Y → independent
+```
+
+Only requests targeting the same conversation context should wait.
+
+Also ensure:
+
+* idle locks are removed
+* failed requests do not leak queue entries
+* memory usage remains bounded
+* no background polling loop is introduced
+
+---
+
+# HISTORY ORDER
+
+After serialization, verify that conversation history remains:
+
+```text
+oldest → newest
+```
+
+and that each successful exchange remains:
+
+```text
+user
+assistant
+```
+
+in the correct order.
+
+Do not introduce duplicate history entries.
+
+---
+
+# RESET + QUEUE EDGE CASES
+
+Test at minimum:
+
+### Case 1
+
+Two simultaneous `/talk` requests from the same user/guild.
+
+Expected:
+
+```text
+Both responses succeed.
+Both exchanges remain in history.
+The second request sees the first exchange.
+```
+
+### Case 2
+
+Two simultaneous automatic mentions from the same user/guild.
+
+Expected:
+
+Same behavior as Case 1.
+
+### Case 3
+
+`/talk` and automatic mention overlap.
+
+Expected:
+
+They use the same conversation serialization.
+
+### Case 4
+
+Two different users send requests simultaneously.
+
+Expected:
+
+They process concurrently.
+
+### Case 5
+
+Same user, different guilds.
+
+Expected:
+
+They process independently.
+
+### Case 6
+
+Request A times out.
+
+Expected:
+
+The lock is released and Request B can proceed.
+
+### Case 7
+
+Request A throws an AI error.
+
+Expected:
+
+The lock is released and Request B can proceed.
+
+### Case 8
+
+Request A encounters persistence failure.
+
+Expected:
+
+The lock is released and Request B can proceed.
+
+### Case 9
+
+Request A is active and `/talk reset` is invoked.
+
+Expected:
+
+Reset behavior is deterministic and cannot be overwritten by stale in-flight persistence.
+
+### Case 10
+
+A large number of different conversation keys are used.
+
+Expected:
+
+Idle lock/queue entries are cleaned up.
+
+---
+
+# TESTING
+
+Inspect the project's existing testing conventions first.
+
+Do not invent an entirely new testing framework.
+
+Add focused tests for the concurrency mechanism if the repository has a suitable test structure.
+
+At minimum, verify:
+
+* same-context serialization
+* different-context concurrency
+* lock cleanup
+* rejection cleanup
+* timeout cleanup
+* reset ordering
+* history preservation
+
+If deterministic concurrency tests require a mock AI provider, use the existing abstraction where possible.
+
+Do not make tests depend on real Groq requests.
+
+---
+
+# VERIFICATION
+
+Before declaring B2 complete:
+
+1. Run the existing test suite.
+2. Run TypeScript/type checks.
+3. Run formatting checks.
+4. Run `git diff --check`.
+5. Confirm no database schema changes.
+6. Confirm no migrations were added.
+7. Confirm B1 reliability behavior remains intact.
+8. Confirm `/talk` still works structurally.
+9. Confirm automatic mentions still use the shared conversation path.
+10. Confirm different conversation contexts are not globally serialized.
+11. Confirm all lock/queue entries are released after failures.
+12. Confirm no new runtime dependencies were introduced unless explicitly justified.
+
+---
+
+# CHANGE SCOPE
+
+Before finishing, inspect `git diff`.
+
+If unrelated files were modified, revert those unrelated modifications before completing the task.
+
+Do not revert legitimate B1 changes that were already present before this task.
+
+---
+
+# FINAL REPORT
+
+When implementation is complete, provide:
+
+## 1. Architecture Found
+
+Describe the actual deployment/process architecture discovered.
+
+## 2. Concurrency Problem
+
+Explain the exact race condition found.
+
+## 3. Solution
+
+Explain exactly how B2 prevents it.
+
+## 4. Lock/Queue Scope
+
+Explain the key used for serialization.
+
+## 5. Reset Semantics
+
+Explain exactly how reset behaves during an in-flight request.
+
+## 6. Failure Safety
+
+Explain what happens when:
+
+* Groq times out
+* Groq fails
+* persistence fails
+* the request throws unexpectedly
+
+## 7. Files Changed
+
+List every modified/added file.
+
+## 8. Files Intentionally Untouched
+
+Confirm:
+
+* database schema
+* migrations
+* prompts
+* memories
+* personas
+* traits
+* B3 behavior
+* B4 behavior
+* B5 behavior
+
+remain untouched.
+
+## 9. Tests
+
+List tests/checks run and their results.
+
+## 10. Remaining Work
+
+Explicitly state:
+
+> B3 — Empty Response & Persistence Reliability
+
+remains the next Track B task.
+
+---
+
+# COMPLETION RULE
+
+B2 is complete only when:
+
+* Same-conversation requests cannot overwrite one another through stale history snapshots.
+* Different conversations remain concurrent.
+* `/talk` and automatic mentions share the same serialization.
+* Reset behavior is deterministic.
+* Locks/queues always release.
+* B1 remains intact.
+* No unrelated Phase 1.4 work is implemented.
+* Tests/typechecks/format checks pass.
+
+Do not claim completion if verification fails.
+
+Do not redesign the database unless the actual deployment architecture requires it.
+
+Do not implement B3, B4, or B5 as part of this task.
