@@ -48,6 +48,8 @@ export type ConversationContextResult = {
   inputTokenBudget: number;
   truncatedHistory: boolean;
   truncatedContext: boolean;
+  optionalContextTruncated: boolean;
+  currentMessageExceedsBudget: boolean;
 };
 
 const PERSONAS: Record<string, string> = {
@@ -153,6 +155,50 @@ function estimateMessagesTokens(messages: ContextChatMessage[]): number {
   );
 }
 
+export function validateConversationContext(
+  result: ConversationContextResult,
+  currentMessage: string,
+): void {
+  const validRoles = new Set(["system", "user", "assistant"]);
+  if (
+    result.messages.some(
+      (message) =>
+        !validRoles.has(message.role) ||
+        typeof message.content !== "string" ||
+        (message.role === "system" && !message.content.trim()),
+    )
+  ) {
+    throw new Error("Conversation context contains an invalid message");
+  }
+
+  const finalMessage = result.messages.at(-1);
+  if (
+    !finalMessage ||
+    finalMessage.role !== "user" ||
+    finalMessage.content !== currentMessage
+  ) {
+    throw new Error("Conversation context lost the current user message");
+  }
+
+  const estimatedInputTokens = estimateMessagesTokens(result.messages);
+  if (estimatedInputTokens !== result.estimatedInputTokens) {
+    throw new Error("Conversation context token estimate is inconsistent");
+  }
+  if (
+    result.reservedOutputTokens < 0 ||
+    result.inputTokenBudget + result.reservedOutputTokens !==
+      CONTEXT_TOKEN_BUDGET
+  ) {
+    throw new Error("Conversation context output reservation is invalid");
+  }
+  if (
+    !result.currentMessageExceedsBudget &&
+    estimatedInputTokens > result.inputTokenBudget
+  ) {
+    throw new Error("Conversation context exceeds its input budget");
+  }
+}
+
 function selectHistory(
   history: ConversationHistoryMessage[],
   availableTokens: number,
@@ -213,6 +259,7 @@ export function buildConversationContext(
     buildMemories(input.memories),
   );
   let truncatedContext = false;
+  let optionalContextTruncated = false;
   const boundedStable: ContextChatMessage[] = [];
 
   if (stable) {
@@ -225,6 +272,7 @@ export function buildConversationContext(
       remaining -= estimateContextTokens(bounded.message);
     }
     truncatedContext ||= bounded.truncated;
+    optionalContextTruncated ||= bounded.truncated;
   }
 
   // Allocation follows the reduction priority: stable instructions, newest
@@ -253,6 +301,7 @@ export function buildConversationContext(
       remaining -= estimateContextTokens(bounded.message);
     }
     truncatedContext ||= bounded.truncated;
+    optionalContextTruncated ||= bounded.truncated;
   }
 
   const messages = [
@@ -273,5 +322,7 @@ export function buildConversationContext(
       truncatedContext ||
       historyResult.truncated ||
       estimatedInputTokens + RESERVED_OUTPUT_TOKENS > CONTEXT_TOKEN_BUDGET,
+    optionalContextTruncated,
+    currentMessageExceedsBudget: currentCost > INPUT_TOKEN_BUDGET,
   };
 }

@@ -1,0 +1,273 @@
+# PHASE 1.5B — CONTEXT INTEGRATION & BOUNDARY HARDENING
+
+You are continuing the Assistant project from the current committed repository state.
+
+The repository is authoritative.
+
+Phase 1.4B reliability infrastructure is COMPLETE.
+Phase 1.5A context architecture is COMPLETE.
+
+Do not redesign either phase.
+
+## OBJECTIVE
+
+Harden and complete the Phase 1.5 conversation-context boundary.
+
+The goal is to ensure that every primary conversation request receives a deliberate, bounded, validated context payload while preserving the existing assistant behavior.
+
+The existing `conversation-context.ts` architecture is the foundation for this work.
+
+## EXISTING 1.5A CONTRACT
+
+The current context system provides:
+
+- A 12,000-token planning budget.
+- 800 tokens reserved for model output.
+- Conservative token estimation.
+- Stable assistant instructions.
+- Persona context.
+- Trait context.
+- Memory context.
+- Recent conversation history.
+- Current user message.
+- Explicit truncation metadata.
+- Recent-history prioritization.
+- Protection against mutating persisted history.
+
+`generateReply()` already uses `buildConversationContext()` before calling Groq.
+
+Preserve these guarantees.
+
+## REQUIRED WORK
+
+First inspect the current Phase 1.5A implementation and tests.
+
+Then harden the context boundary only where necessary.
+
+### 1. Verify the final request budget
+
+Ensure the final message list passed to the primary Groq request is bounded according to the Phase 1.5A contract.
+
+The implementation must account for:
+
+- System/context messages
+- Conversation history
+- Current user message
+- Reserved output tokens
+
+Do not blindly assume the character estimator is exact.
+
+It is an estimate and must remain documented as such.
+
+### 2. Preserve the current user message
+
+Do not silently modify the user's current message merely to satisfy the context budget.
+
+If the current message alone exceeds the planning budget:
+
+- Preserve the current message.
+- Remove/reduce lower-priority context first.
+- Report the resulting budget condition explicitly.
+- Do not mutate persisted history.
+
+Do not invent a new user-message truncation policy unless the repository demonstrates that one is required.
+
+### 3. Make context degradation deterministic
+
+When context must be reduced, use an explicit priority order.
+
+Higher-priority information must survive before lower-priority information.
+
+Preserve the current architectural intent:
+
+1. Current user message
+2. Stable assistant instructions
+3. Recent conversation history
+4. Persona
+5. Traits
+6. Memories
+
+If the existing implementation uses a different internal allocation strategy, preserve behavior unless a concrete defect requires adjustment.
+
+### 4. Validate the final context
+
+Add a final validation step before the Groq request.
+
+The validator should verify:
+
+- Valid message roles.
+- String content.
+- Current user message is present.
+- No invalid/empty context messages are introduced.
+- Estimated input size is reported correctly.
+- Reserved output capacity is accounted for.
+- Persisted history remains untouched.
+
+Do not duplicate the B3 response validation system.
+This is INPUT context validation, not model-output validation.
+
+### 5. Preserve observability without leaking content
+
+If context degradation occurs, make it possible to diagnose through safe metadata.
+
+Do NOT log:
+
+- User messages.
+- Assistant responses.
+- Memories.
+- Persona text.
+- Traits.
+- Full prompts.
+
+Safe metadata may include:
+
+- Operation.
+- Estimated input tokens.
+- Reserved output tokens.
+- Whether history was truncated.
+- Whether optional context was truncated.
+- Whether the current message exceeded the planning budget.
+
+Do not introduce verbose logging for normal requests unless necessary.
+
+### 6. Test the boundary
+
+Add focused tests covering:
+
+- Normal context.
+- Large history.
+- Large persona.
+- Large traits.
+- Large memories.
+- Oversized current message.
+- Empty optional sections.
+- All optional sections simultaneously.
+- Current-message preservation.
+- Final budget accounting.
+- Context immutability.
+- Deterministic degradation order.
+
+Tests must verify actual invariants rather than merely implementation details.
+
+## STRICT BOUNDARIES
+
+Do NOT modify:
+
+- Database schema.
+- Database migrations.
+- Memory storage architecture.
+- Memory extraction behavior.
+- Persona commands.
+- Trait commands.
+- Discord command semantics.
+- B1 Groq retry behavior.
+- B2 conversation locking.
+- B3 response validation.
+- B4 memory extraction.
+- B5 caller-level error handling.
+- Replit workflow configuration.
+- Secrets or environment variables.
+
+Do NOT add a new AI provider.
+
+Do NOT add a new retry system.
+
+Do NOT introduce a second context builder.
+
+Do NOT redesign the system prompt.
+
+Do NOT change the assistant's personality or tone.
+
+Do NOT add semantic memory ranking yet.
+
+That belongs to a later context-quality phase.
+
+## ARCHITECTURAL REQUIREMENT
+
+`conversation-context.ts` remains the single source of truth for primary conversation context construction.
+
+Avoid rebuilding context logic inside:
+
+- `/talk`
+- `messageCreate`
+- `groq.ts`
+- command handlers
+
+The primary conversation path must continue to use the shared context builder.
+
+## REGRESSION REQUIREMENT
+
+Phase 1.4B must remain intact.
+
+Verify that:
+
+- B1 still owns Groq retries/timeouts/classification.
+- B2 still serializes `(userId, guildId)` conversations.
+- B3 still rejects invalid model responses.
+- B4 remains background and non-critical.
+- B5 still owns caller-level safe error mapping.
+
+Do not modify those systems unless required to prevent a direct regression.
+
+## VERIFICATION
+
+Run:
+
+- Discord bot tests.
+- Phase 1.5 context tests.
+- Bot typecheck.
+- Workspace typecheck.
+- Prettier on modified files.
+- `git diff --check`.
+
+Do not perform external API calls merely to claim runtime success.
+
+If Discord credentials are unavailable, report that as a runtime limitation rather than treating it as a code failure.
+
+## STOP CONDITIONS
+
+STOP instead of guessing if:
+
+- The existing Phase 1.5A behavior contradicts this objective.
+- A database change appears necessary.
+- A provider-specific tokenizer is required for correctness.
+- A new prompt architecture appears necessary.
+- The implementation would require changing B1–B5 behavior.
+- The desired behavior for an oversized current message cannot be established from the existing contract.
+
+Do not invent product behavior.
+
+## REQUIRED FINAL REPORT
+
+Return only:
+
+### Phase 1.5B — Implementation Report
+
+**Implemented**
+- Actual changes only.
+
+**Files changed**
+- Exact paths.
+
+**Tests**
+- Count and pass/fail result.
+
+**Verification**
+- Typecheck.
+- Formatting.
+- `git diff --check`.
+- Other relevant validation.
+
+**Compatibility**
+- B1–B5 status.
+- Phase 1.5A status.
+
+**Runtime limitations**
+- Only actual limitations.
+
+**Remaining**
+- Next phase if clearly established.
+
+Do not claim validation that was not actually performed.
+
+The phase is complete only when the implementation and regression verification pass.

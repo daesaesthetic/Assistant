@@ -6,6 +6,7 @@ import {
   INPUT_TOKEN_BUDGET,
   RESERVED_OUTPUT_TOKENS,
   estimateContextTokens,
+  validateConversationContext,
 } from "./conversation-context.js";
 
 const history = [
@@ -45,6 +46,8 @@ test("builds sections in stable prompt order and skips empty optional sections",
   assert.match(result.messages[3].content, /^Memory context:/);
   assert.equal(result.messages.at(-1)?.content, "hello");
   assert.equal(result.truncatedContext, false);
+  assert.equal(result.optionalContextTruncated, false);
+  assert.equal(result.currentMessageExceedsBudget, false);
 });
 
 test("preserves the current message exactly, including when it is oversized", () => {
@@ -59,6 +62,7 @@ test("preserves the current message exactly, including when it is oversized", ()
   assert.equal(result.messages.at(-1)?.role, "user");
   assert.equal(result.truncatedContext, true);
   assert.equal(result.truncatedHistory, true);
+  assert.equal(result.currentMessageExceedsBudget, true);
 });
 
 test("prefers recent history and truncates from the oldest side predictably", () => {
@@ -132,6 +136,7 @@ test("normal requests fit the input budget and reserve output capacity", () => {
       CONTEXT_TOKEN_BUDGET,
     true,
   );
+  validateConversationContext(result, "current");
 });
 
 test("history reduction does not change persisted input", () => {
@@ -147,4 +152,70 @@ test("history reduction does not change persisted input", () => {
 test("context estimates include per-message overhead", () => {
   assert.equal(estimateContextTokens({ role: "user", content: "" }), 4);
   assert.ok(estimateContextTokens({ role: "user", content: "hello" }) > 4);
+});
+
+test("degrades optional context in deterministic priority order", () => {
+  const result = buildConversationContext({
+    botName: "Azurion",
+    persona: { personaName: "custom", customDescription: "p".repeat(20_000) },
+    traits: ["t".repeat(20_000)],
+    memories: ["m".repeat(20_000)],
+    history: Array.from({ length: 40 }, (_, index) => ({
+      role: "user" as const,
+      content: `history-${index} ${"h".repeat(2_000)}`,
+    })),
+    currentMessage: "current",
+  });
+  const contents = result.messages.map((message) => message.content);
+
+  assert.equal(contents.at(-1), "current");
+  assert.equal(
+    contents.some((content) => content.includes("history-39")),
+    true,
+  );
+  assert.equal(
+    contents.some((content) => content.includes("history-0")),
+    false,
+  );
+  assert.equal(result.truncatedHistory, true);
+  assert.equal(result.optionalContextTruncated, true);
+  validateConversationContext(result, "current");
+});
+
+test("skips empty optional sections without creating empty messages", () => {
+  const result = buildConversationContext({
+    botName: "Azurion",
+    persona: { personaName: "custom", customDescription: "  " },
+    traits: ["", "   "],
+    memories: ["", "  "],
+    history: [{ role: "user", content: "  " }],
+    currentMessage: "current",
+  });
+
+  assert.deepEqual(
+    result.messages.map((message) => message.content),
+    [result.messages[0].content, "current"],
+  );
+  assert.equal(
+    result.messages.some((message) => !message.content.trim()),
+    false,
+  );
+  assert.equal(result.truncatedHistory, true);
+  validateConversationContext(result, "current");
+});
+
+test("validator rejects a changed current message and incorrect estimate", () => {
+  const result = buildConversationContext({
+    botName: "Azurion",
+    history: [],
+    currentMessage: "current",
+  });
+
+  assert.throws(() => validateConversationContext(result, "changed"));
+  assert.throws(() =>
+    validateConversationContext(
+      { ...result, estimatedInputTokens: result.estimatedInputTokens + 1 },
+      "current",
+    ),
+  );
 });

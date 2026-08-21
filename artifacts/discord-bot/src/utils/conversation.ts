@@ -15,6 +15,7 @@ import { db } from "../database/index.js";
 import { conversationStore } from "./conversation-store.js";
 import {
   buildConversationContext,
+  validateConversationContext,
   type ConversationHistoryMessage,
 } from "./conversation-context.js";
 // Conservative bound for one concise user fact; reject longer candidates.
@@ -154,7 +155,7 @@ export async function generateReply(params: {
     const traits = await db.getTraits(userId, guildId);
 
     const history = await conversationStore.getHistory(context);
-    const messages = buildConversationContext({
+    const contextResult = buildConversationContext({
       botName,
       persona: persona
         ? {
@@ -166,12 +167,13 @@ export async function generateReply(params: {
       memories,
       history,
       currentMessage: content,
-    }).messages;
+    });
+    validateConversationContext(contextResult, content);
 
     const completion = await createGroqCompletion(
       {
         model: TEXT_MODEL,
-        messages,
+        messages: contextResult.messages,
         max_tokens: 800,
       },
       { requestType: "text" },
