@@ -1,0 +1,89 @@
+EXECUTE PHASE 1.4B.2 NOW.
+
+This is an explicit authorization to modify the repository.
+
+Do not review, summarize, inspect-only, or wait for another instruction.
+
+Implement the Phase 1.4B.2 Conversation Reliability & Concurrency changes described in the previous specification.
+
+You are authorized to:
+
+1. Modify the necessary source files.
+2. Add focused tests using the existing test framework.
+3. Run typechecks, tests, formatting checks, and git diff --check.
+4. Fix issues discovered during implementation.
+
+The previous agent already completed Phase 1.4B.1 — Shared Groq Reliability Layer. Preserve that implementation.
+
+B2 ONLY:
+
+- Prevent concurrent requests for the same (userId, guildId) conversation from overwriting each other's history.
+- Serialize the read → generate → persist workflow for the same conversation.
+- Keep different users/guilds concurrent.
+- Make /talk and automatic mention responses use the same serialization.
+- Make /talk reset deterministic when another request is in flight.
+- Ensure locks/queues are released on success, AI failure, timeout, persistence failure, and unexpected exceptions.
+- Prevent unbounded lock/queue memory growth.
+- Do not use a global AI lock.
+
+Do NOT implement B3, B4, or B5.
+
+Do NOT change:
+
+- prompts
+- personas
+- traits
+- token budgeting
+- memory architecture
+- database schema
+- migrations
+- empty-response/"..." behavior
+- user-facing AI error redesign
+- unrelated Discord functionality
+
+Do not add dependencies unless absolutely necessary.
+
+First inspect the current repository to determine the actual conversation architecture and deployment model. Then implement the smallest correct B2 solution.
+
+If the project is single-process, prefer a lightweight in-memory per-conversation async lock/queue.
+
+The lock must cover the relevant:
+
+read history
+→ build context
+→ AI generation
+→ persist history
+
+sequence.
+
+Do not merely lock the final database write.
+
+After implementation, run the existing tests and:
+
+pnpm --filter @workspace/discord-bot run typecheck
+pnpm run typecheck
+git diff --check
+
+Then inspect the final diff for unrelated changes.
+
+Your response should be an IMPLEMENTATION REPORT containing:
+
+- files changed
+- concurrency solution
+- reset semantics
+- failure/lock-release behavior
+- tests run and results
+- typecheck results
+- formatting/diff results
+- confirmation that B1 remains intact
+- remaining B3 work
+
+Again:
+
+THIS IS NOT A REVIEW REQUEST.
+
+THIS IS NOT A PLANNING REQUEST.
+
+THIS IS NOT A REQUEST TO ASK WHAT I WANT DONE.
+
+EXECUTE THE B2 IMPLEMENTATION NOW.

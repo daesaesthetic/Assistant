@@ -147,61 +147,63 @@ export async function generateReply(params: {
 
   const context = { userId, guildId };
 
-  if (resetHistory) await conversationStore.reset(context);
+  return conversationStore.runExclusive(context, async () => {
+    if (resetHistory) await conversationStore.reset(context);
 
-  const botName = await db.getBotName(guildId);
-  const persona = await db.getPersona(userId, guildId);
-  const memories = await db.getMemories(userId, guildId);
-  const traits = await db.getTraits(userId, guildId);
+    const botName = await db.getBotName(guildId);
+    const persona = await db.getPersona(userId, guildId);
+    const memories = await db.getMemories(userId, guildId);
+    const traits = await db.getTraits(userId, guildId);
 
-  let systemPrompt = buildSystemPrompt(
-    botName,
-    persona?.personaName,
-    persona?.customDescription,
-    traits,
-  );
+    let systemPrompt = buildSystemPrompt(
+      botName,
+      persona?.personaName,
+      persona?.customDescription,
+      traits,
+    );
 
-  if (memories.length > 0) {
-    systemPrompt +=
-      "\n\nThings you know about this user — reference naturally when relevant, never recite the whole list:\n" +
-      memories.map((m) => `- ${m}`).join("\n");
-  }
+    if (memories.length > 0) {
+      systemPrompt +=
+        "\n\nThings you know about this user — reference naturally when relevant, never recite the whole list:\n" +
+        memories.map((m) => `- ${m}`).join("\n");
+    }
 
-  const history = await conversationStore.getHistory(context);
-  const messages = buildBudgetedMessages(systemPrompt, history, content);
+    const history = await conversationStore.getHistory(context);
+    const messages = buildBudgetedMessages(systemPrompt, history, content);
 
-  const completion = await createGroqCompletion(
-    {
-      model: TEXT_MODEL,
-      messages,
-      max_tokens: 800,
-    },
-    { requestType: "text" },
-  );
+    const completion = await createGroqCompletion(
+      {
+        model: TEXT_MODEL,
+        messages,
+        max_tokens: 800,
+      },
+      { requestType: "text" },
+    );
 
-  const response = completion.choices[0]?.message?.content?.trim() ?? "...";
+    const response = completion.choices[0]?.message?.content?.trim() ?? "...";
 
-  // Persist updated history (cap at 20 messages = 10 exchanges)
-  const updatedHistory = [
-    ...history,
-    { role: "user" as const, content },
-    { role: "assistant" as const, content: response },
-  ].slice(-20);
-  await conversationStore.setHistory(context, updatedHistory);
+    // Persist updated history (cap at 20 messages = 10 exchanges)
+    const updatedHistory = [
+      ...history,
+      { role: "user" as const, content },
+      { role: "assistant" as const, content: response },
+    ].slice(-20);
+    await conversationStore.setHistory(context, updatedHistory);
 
-  // Fire memory extraction in the background — never blocks the reply
-  void extractMemories(userId, guildId, content, response);
+    // Fire memory extraction in the background — never blocks the reply
+    void extractMemories(userId, guildId, content, response);
 
-  let personaLabel: string | undefined;
-  if (persona) {
-    personaLabel =
-      persona.personaName === "custom"
-        ? "Custom"
-        : persona.personaName.charAt(0).toUpperCase() +
-          persona.personaName.slice(1);
-  }
+    let personaLabel: string | undefined;
+    if (persona) {
+      personaLabel =
+        persona.personaName === "custom"
+          ? "Custom"
+          : persona.personaName.charAt(0).toUpperCase() +
+            persona.personaName.slice(1);
+    }
 
-  return { text: response, botName, personaLabel };
+    return { text: response, botName, personaLabel };
+  });
 }
 
 async function extractMemories(
