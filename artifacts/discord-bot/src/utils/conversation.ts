@@ -20,6 +20,7 @@ import {
 } from "./conversation-context.js";
 // Conservative bound for one concise user fact; reject longer candidates.
 const MAX_MEMORY_LENGTH = 500;
+const DEFAULT_BOT_NAME = "𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯";
 
 type PrimaryCompletionShape = {
   choices?: Array<{
@@ -74,7 +75,7 @@ export function buildBudgetedMessages(
   currentContent: string,
 ): Array<{ role: "system" | "user" | "assistant"; content: string }> {
   return buildConversationContext({
-    botName: "Azurion",
+    botName: DEFAULT_BOT_NAME,
     persona: { customDescription: systemPrompt, personaName: "custom" },
     history,
     currentMessage: currentContent,
@@ -174,7 +175,7 @@ export async function generateReply(params: {
       {
         model: TEXT_MODEL,
         messages: contextResult.messages,
-        max_tokens: 800,
+        max_tokens: 1_200,
       },
       { requestType: "text" },
     );
@@ -291,7 +292,7 @@ export async function extractMemories(
           {
             role: "system",
             content:
-              'You extract concrete personal facts about the user from a conversation turn. Return ONLY a valid JSON array of short strings. Examples: ["prefers dark mode","works as a nurse","lives in Tokyo"]. Only include definitive personal facts the user stated about themselves — not questions they asked, not what was said to them, not vague impressions. If nothing concrete was learned, return [].',
+              'You maintain a small, useful memory of the user. Extract only concrete, durable personal facts the user explicitly stated about themselves or explicitly asked the assistant to remember. Return ONLY a valid JSON array of short strings. Examples: ["prefers dark mode","works as a nurse","lives in Tokyo"]. Do not save questions, one-off tasks, sensitive personal data, guesses, assistant claims, temporary moods, secrets, or facts about other people. If nothing concrete was learned, return [].',
           },
           {
             role: "user",

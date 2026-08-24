@@ -7,7 +7,7 @@ export default {
     .setName("credits")
     .setDescription("View creator information"),
   async execute(interaction: ChatInputCommandInteraction) {
-    const embed = createEmbed("Azurion — Credits")
+    const embed = createEmbed("𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯ — Credits")
       .setDescription("*Crafted with precision and intent.*")
       .addFields(
         { name: "Created by", value: "Azurion", inline: true },
@@ -19,7 +19,7 @@ export default {
           inline: false,
         }
       )
-      .setFooter({ text: "Azurion — Precision. Intelligence. Control." });
+      .setFooter({ text: "𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯ — precision · intelligence · presence" });
 
     await interaction.reply({ embeds: [embed] });
   },

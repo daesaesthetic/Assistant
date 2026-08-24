@@ -15,6 +15,7 @@ const DATA_DIR = path.join(__dirname, "..", "..", "data");
 const JSON_PATH = path.join(DATA_DIR, "db.json");
 const JSON_BACKUP_PATH = path.join(DATA_DIR, "db.json.pre-sqlite.bak");
 const SQLITE_PATH = path.join(DATA_DIR, "azurion.sqlite");
+export const DEFAULT_BOT_NAME = "𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯";
 
 export interface Persona {
   personaName: string;
@@ -202,6 +203,15 @@ async function applySchema(db: SqliteDatabase): Promise<void> {
     `);
       },
     },
+    {
+      version: 2,
+      apply: async (database) => {
+        await database.run(
+          "UPDATE guild_config SET bot_name = ? WHERE bot_name IN ('Assistant', 'Azurion')",
+          DEFAULT_BOT_NAME,
+        );
+      },
+    },
   ];
 
   const current = (await db.get<{ version: number }>(
@@ -313,7 +323,7 @@ async function importJson(db: SqliteDatabase): Promise<void> {
            bot_name = excluded.bot_name`,
         key,
         config.modLogChannelId ?? null,
-        config.botName ?? "Assistant"
+        config.botName ?? DEFAULT_BOT_NAME
       );
       for (const word of config.blacklistedWords ?? []) {
         await db.run(
@@ -779,7 +789,7 @@ export const db = {
     const existing = await this.getGuildConfig(guildId);
     const next = {
       modLogChannelId: config.modLogChannelId ?? existing?.modLogChannelId,
-      botName: config.botName ?? existing?.botName ?? "Assistant",
+      botName: config.botName ?? existing?.botName ?? DEFAULT_BOT_NAME,
       blacklistedWords: config.blacklistedWords ?? existing?.blacklistedWords ?? [],
       botChannelIds: config.botChannelIds ?? existing?.botChannelIds ?? [],
     };
@@ -852,7 +862,7 @@ export const db = {
   },
 
   async getBotName(guildId: string): Promise<string> {
-    return (await this.getGuildConfig(guildId))?.botName ?? "Assistant";
+    return (await this.getGuildConfig(guildId))?.botName ?? DEFAULT_BOT_NAME;
   },
 
   async setBotName(guildId: string, name: string): Promise<void> {

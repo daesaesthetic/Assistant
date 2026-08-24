@@ -62,7 +62,7 @@ export default {
             .setDescription(
               `The bot's display name is now **${name}**.\nThis will appear as the header in all future conversation replies.`
             )
-            .setFooter({ text: "Use /name reset to revert to Azurion." }),
+            .setFooter({ text: "Use /name reset to revert to 𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯." }),
         ],
       });
     } else if (sub === "reset") {

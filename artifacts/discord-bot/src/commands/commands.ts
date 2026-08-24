@@ -7,14 +7,14 @@ export default {
     .setName("commands")
     .setDescription("View all available commands organized by category"),
   async execute(interaction: ChatInputCommandInteraction) {
-    const embed = createEmbed("Azurion — Commands")
-      .setDescription("All available commands. You can also **@mention** the bot anywhere, or chat freely in a designated conversation channel.")
+    const embed = createEmbed("𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯ — Field Manual")
+      .setDescription("A quiet edge in your pocket. Use a command below, or **@mention** me anywhere and tell me what you need.")
       .addFields(
         {
           name: "Conversation",
           value: [
-            "`/talk` — Converse (maintains memory, 5s cooldown)",
-            "`/suggest` — Get high-quality suggestions — text or image (10s cooldown)",
+            "`/talk` — Think with me; I maintain the thread and remember useful context (5s cooldown)",
+            "`/suggest` — Turn a goal or dilemma into sharp recommendations — text or image (10s cooldown)",
             "`/edit` — Transform an image with written instructions (30s cooldown)",
             "`/persona` — Set your conversation style (Analyst, Observer, Strategist, Minimalist, Oracle, Custom)",
             "`/traits add` — Add a personality trait (flirty, sarcastic, blunt, etc.)",
@@ -31,7 +31,7 @@ export default {
           value: [
             "`/search` — Search the web via DuckDuckGo (10s cooldown)",
             "`/profile` — View a user's profile and stats",
-            "`/say` — Make Azurion send a message",
+            "`/say` — Make Assistant ₯ send a message",
           ].join("\n"),
           inline: false,
         },
@@ -54,7 +54,7 @@ export default {
             "`/channel remove` — Disable auto-response in a channel",
             "`/channel list` — List all conversation channels",
             "`/name set` — Set the bot's display name for this server",
-            "`/name reset` — Reset display name to Azurion",
+            "`/name reset` — Reset display name to 𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯",
           ].join("\n"),
           inline: false,
         },
