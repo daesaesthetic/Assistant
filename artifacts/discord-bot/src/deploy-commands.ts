@@ -77,6 +77,7 @@ const rest = new REST({ version: "10" }).setToken(token);
 // Global is the safe default for a public bot. Use the explicitly named
 // override only when developing command changes against one test guild.
 const guildId = process.env.DISCORD_DEPLOY_GUILD_ID;
+const legacyGuildId = process.env.DISCORD_GUILD_ID;
 
 let result: unknown[];
 if (guildId) {
@@ -91,5 +92,13 @@ if (guildId) {
     body: commands,
   })) as unknown[];
   console.log(`[Deploy] ✓ Registered ${result.length} command(s) globally.`);
+  if (legacyGuildId) {
+    await rest.put(Routes.applicationGuildCommands(clientId, legacyGuildId), {
+      body: [],
+    });
+    console.log(
+      `[Deploy] ✓ Removed legacy guild command copies from ${legacyGuildId}.`,
+    );
+  }
   console.log("[Deploy] Global commands are now available to other guild installs and eligible user installs.");
 }
