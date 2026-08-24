@@ -30,7 +30,7 @@ export default {
   data: new SlashCommandBuilder()
     .setName("talk")
     .setDescription(
-      "Have a conversation — Azurion remembers your exchanges over time",
+      "Think out loud with Assistant ₯ — it keeps the thread and useful context",
     )
     .addStringOption((opt) =>
       opt.setName("message").setDescription("Your message").setRequired(true),

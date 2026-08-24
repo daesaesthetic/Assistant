@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits } from "discord.js";
 import { createEmbed, createErrorEmbed } from "../utils/embeds.js";
-import { db } from "../database/index.js";
+import { db, DEFAULT_BOT_NAME } from "../database/index.js";
 import type { Command } from "../types.js";
 
 export default {
@@ -21,7 +21,7 @@ export default {
         )
     )
     .addSubcommand((sub) =>
-      sub.setName("reset").setDescription("Reset the display name back to Assistant")
+      sub.setName("reset").setDescription("Reset the display name back to Assistant ₯")
     )
     .addSubcommand((sub) =>
       sub.setName("view").setDescription("See the current display name for this server")
@@ -67,11 +67,11 @@ export default {
       });
     } else if (sub === "reset") {
       const prev = await db.getBotName(guildId);
-      await db.setBotName(guildId, "Assistant");
+      await db.setBotName(guildId, DEFAULT_BOT_NAME);
       await interaction.reply({
         embeds: [
           createEmbed("Display Name Reset").setDescription(
-            `Display name reset from **${prev}** back to **Assistant**.`
+            `Display name reset from **${prev}** back to **${DEFAULT_BOT_NAME}**.`
           ),
         ],
       });

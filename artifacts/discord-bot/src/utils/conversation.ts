@@ -11,7 +11,7 @@ import {
   GroqReliabilityError,
   TEXT_MODEL,
 } from "./groq.js";
-import { db } from "../database/index.js";
+import { db, DEFAULT_BOT_NAME } from "../database/index.js";
 import { conversationStore } from "./conversation-store.js";
 import {
   buildConversationContext,
@@ -20,7 +20,6 @@ import {
 } from "./conversation-context.js";
 // Conservative bound for one concise user fact; reject longer candidates.
 const MAX_MEMORY_LENGTH = 500;
-const DEFAULT_BOT_NAME = "𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯";
 
 type PrimaryCompletionShape = {
   choices?: Array<{

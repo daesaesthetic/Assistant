@@ -5,7 +5,7 @@ import type { Command } from "../types.js";
 export default {
   data: new SlashCommandBuilder()
     .setName("say")
-    .setDescription("Make Azurion send a message in this channel")
+    .setDescription("Make Assistant ₯ send a message in this channel")
     .addStringOption((opt) =>
       opt.setName("message").setDescription("The message to send").setRequired(true)
     ),

@@ -1,6 +1,6 @@
-# Azurion Assistant — Discord Bot
+# Assistant ₯ — Discord Bot
 
-A fully modular Discord bot built with discord.js v14. Features slash commands, AI-powered conversation (Groq/Llama 3.3), image generation (Pollinations.ai), web search (DuckDuckGo), persona system, and AutoMod.
+A fully modular Discord bot built with discord.js v14. Features slash commands, AI-powered conversation (Groq), image generation (Pollinations.ai), web search (DuckDuckGo), persona system, persistent context, and AutoMod. Its default display name is `𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯`.
 
 ## Run & Operate
 
@@ -21,7 +21,7 @@ A fully modular Discord bot built with discord.js v14. Features slash commands, 
 
 - `artifacts/discord-bot/src/commands/` — one file per slash command
 - `artifacts/discord-bot/src/events/` — Discord event handlers
-- `artifacts/discord-bot/src/utils/` — Groq client, embeds, cooldowns, search
+- `artifacts/discord-bot/src/utils/` — Groq client, context engine, themed embeds, cooldowns, search
 - `artifacts/discord-bot/src/database/index.ts` — SQLite-backed database abstraction
 - `artifacts/discord-bot/data/` — runtime database directory, created and initialized on first startup
 
@@ -47,7 +47,7 @@ Detects spam (5 msgs/5s), excessive caps (>70%), and blacklisted words. Issues w
 
 - `DISCORD_BOT_TOKEN` — bot login token
 - `DISCORD_CLIENT_ID` — application ID
-- `GROQ_API_KEY` — free at console.groq.com
+- `GROQ_API_KEY` — Groq API key
 
 ## Setup Steps
 

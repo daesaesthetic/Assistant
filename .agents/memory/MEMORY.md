@@ -1,2 +1,3 @@
 - [Groq SDK retry defaults](groq-sdk-retry-defaults.md) — disable implicit SDK retries before adding application-owned retry behavior.
 - [Groq model availability](groq-model-availability.md) — treat provider model IDs as replaceable and verify them against Groq’s current production list after HTTP 404s.
+- [Assistant context design](assistant-context-design.md) — expand working context without dropping the exact current message or deterministic newest-first history trimming.

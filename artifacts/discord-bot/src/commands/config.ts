@@ -22,7 +22,7 @@ function requireAdmin(interaction: ChatInputCommandInteraction): boolean {
 export default {
   data: new SlashCommandBuilder()
     .setName("config")
-    .setDescription("Configure Azurion settings for this server (admins only)")
+    .setDescription("Configure Assistant ₯ settings for this server (admins only)")
     .addSubcommand((sub) =>
       sub.setName("view").setDescription("View current server configuration")
     )
