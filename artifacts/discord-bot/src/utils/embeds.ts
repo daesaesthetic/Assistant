@@ -11,7 +11,7 @@ export const EMBED_COLORS = {
   warning: 0xd19b45,
 } as const;
 
-const EMBED_AUTHOR = "𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯  /  AZURION";
+const EMBED_AUTHOR = "𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯  /  PERSONAL ASSISTANT";
 const EMBED_FOOTER = "𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯  ·  precision with presence";
 
 export function createEmbed(title: string, description?: string): EmbedBuilder {

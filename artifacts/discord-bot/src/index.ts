@@ -30,7 +30,7 @@ for (const file of commandFiles) {
   const command = mod.default;
   if (command?.data?.name) {
     client.commands.set(command.data.name, command);
-    console.log(`[Azurion] Loaded command: /${command.data.name}`);
+    console.log(`[Assistant ₯] Loaded command: /${command.data.name}`);
   }
 }
 
@@ -48,13 +48,13 @@ for (const file of eventFiles) {
   } else {
     client.on(event.name, (...args) => void event.execute(...args));
   }
-  console.log(`[Azurion] Registered event: ${event.name}${event.once ? " (once)" : ""}`);
+  console.log(`[Assistant ₯] Registered event: ${event.name}${event.once ? " (once)" : ""}`);
 }
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 const token = process.env.DISCORD_BOT_TOKEN;
 if (!token) {
-  console.error("[Azurion] DISCORD_BOT_TOKEN is not set. Set it in Secrets and restart.");
+  console.error("[Assistant ₯] DISCORD_BOT_TOKEN is not set. Set it in Secrets and restart.");
   process.exit(1);
 }
 

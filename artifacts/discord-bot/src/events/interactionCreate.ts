@@ -53,7 +53,7 @@ export default {
       await command.execute(interaction);
     } catch (err) {
       console.error(
-        `[Azurion] Error in /${interaction.commandName}`,
+        `[Assistant ₯] Error in /${interaction.commandName}`,
         getSafeAiErrorLogContext(`/${interaction.commandName}`, err),
       );
       const errorEmbed = createErrorEmbed(getAiUserFacingMessage(err));

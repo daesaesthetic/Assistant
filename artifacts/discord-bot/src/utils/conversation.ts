@@ -122,7 +122,7 @@ export async function persistConversationHistory(
     await setHistory(context, history);
     return true;
   } catch {
-    console.error("[Azurion] Conversation history persistence failed", {
+    console.error("[Assistant ₯] Conversation history persistence failed", {
       category: "persistence",
       userId: context.userId,
       guildId: context.guildId,
@@ -261,7 +261,7 @@ function logMemoryFailure(error: unknown, fallbackCategory: string): void {
   const category =
     error instanceof GroqReliabilityError ? error.category : fallbackCategory;
 
-  console.error("[Azurion] Memory extraction failed", {
+  console.error("[Assistant ₯] Memory extraction failed", {
     operation: "memory_extraction",
     ...context,
     category,

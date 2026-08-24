@@ -20,7 +20,7 @@ export default {
         .addStringOption((opt) =>
           opt
             .setName("name")
-            .setDescription("Channel name (default: azurion)")
+            .setDescription("Channel name (default: assistant)")
             .setRequired(false)
             .setMaxLength(32)
         )
@@ -56,7 +56,7 @@ export default {
 
     // ── create ────────────────────────────────────────────────────────────────
     if (sub === "create") {
-      const rawName = interaction.options.getString("name") ?? "azurion";
+      const rawName = interaction.options.getString("name") ?? "assistant";
       const channelName = rawName
         .toLowerCase()
         .replace(/\s+/g, "-")
@@ -66,7 +66,7 @@ export default {
 
       const channel = await guild.channels
         .create({
-          name: channelName || "azurion",
+          name: channelName || "assistant",
           type: ChannelType.GuildText,
           topic: `${await db.getBotName(guildId)}'s space — chat freely here.`,
           permissionOverwrites: [

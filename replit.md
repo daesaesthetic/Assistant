@@ -73,7 +73,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 Runtime SQLite files are intentionally not committed. Before a production rollback or database recovery:
 
-1. Stop the `Azurion Discord Bot` workflow before touching the database.
+1. Stop the `Azurion Discord Bot` workflow before touching the database. (The workflow identifier is retained for compatibility; the bot's displayed name is Assistant ₯.)
 2. Create a backup of the current runtime database directory.
 3. Restore the prior application revision and its matching database backup only after confirming compatibility.
 4. Keep the backup so the rollback can be reviewed or reversed.

@@ -8,7 +8,7 @@ const apiKey = process.env.GROQ_API_KEY;
 
 if (!apiKey) {
   console.warn(
-    "[Azurion] GROQ_API_KEY is not set — AI features will be unavailable.",
+    "[Assistant ₯] GROQ_API_KEY is not set — AI features will be unavailable.",
   );
 }
 
@@ -266,7 +266,7 @@ export async function createGroqCompletion(
       elapsedMs: 0,
     });
     console.error(
-      "[Azurion] Groq request failed",
+      "[Assistant ₯] Groq request failed",
       getGroqErrorLogContext(error),
     );
     throw error;
@@ -315,7 +315,7 @@ export async function createGroqCompletion(
           cause: lastError,
         });
         console.error(
-          "[Azurion] Groq request failed",
+          "[Assistant ₯] Groq request failed",
           safeLogContext({
             requestType: options.requestType,
             model: String(params.model),
@@ -333,7 +333,7 @@ export async function createGroqCompletion(
 
       retryAttempted = true;
       console.warn(
-        "[Azurion] Groq request retrying",
+        "[Assistant ₯] Groq request retrying",
         safeLogContext({
           requestType: options.requestType,
           model: String(params.model),

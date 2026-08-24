@@ -10,8 +10,8 @@ export default {
     const embed = createEmbed("𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯ — Credits")
       .setDescription("*Crafted with precision and intent.*")
       .addFields(
-        { name: "Created by", value: "Azurion", inline: true },
-        { name: "Username", value: "azurionx", inline: true },
+        { name: "Created by", value: "𝘼𝙨𝙨𝙞𝙨𝙩𝙖𝙣𝙩 ₯", inline: true },
+        { name: "Username", value: "assistant", inline: true },
         { name: "Version", value: "1.0.0", inline: true },
         {
           name: "Built with",

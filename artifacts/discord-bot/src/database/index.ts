@@ -465,7 +465,7 @@ async function importJson(db: SqliteDatabase): Promise<void> {
       JSON.stringify({ ...report, completedAt: Date.now() })
     );
     await db.exec("COMMIT");
-    console.log(`[Azurion] SQLite migration complete: ${JSON.stringify(report)}`);
+     console.log(`[Assistant ₯] SQLite migration complete: ${JSON.stringify(report)}`);
   } catch (error) {
     await db.exec("ROLLBACK");
     throw error;
