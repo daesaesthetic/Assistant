@@ -3,12 +3,15 @@
  *
  * Run with:  pnpm --filter @workspace/discord-bot run deploy
  *
- * This registers commands globally (available in all guilds after ~1 hour).
- * For faster testing during development, replace Routes.applicationCommands()
- * with Routes.applicationGuildCommands(clientId, GUILD_ID) to register
- * commands to a specific guild instantly.
+ * This registers commands globally so every server can discover them.
+ * Set DISCORD_DEPLOY_GUILD_ID for an explicit guild-only development deploy.
  */
-import { REST, Routes } from "discord.js";
+import {
+  ApplicationIntegrationType,
+  InteractionContextType,
+  REST,
+  Routes,
+} from "discord.js";
 import { readdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -28,26 +31,55 @@ const commands: object[] = [];
 const commandsDir = path.join(__dirname, "commands");
 const files = readdirSync(commandsDir).filter((f) => f.endsWith(".ts") || f.endsWith(".js"));
 
+// These commands are useful when a user installs the app for themselves. They
+// can run in any guild where the user can use the app, as well as DMs.
+const USER_INSTALL_COMMANDS = new Set([
+  "commands",
+  "credits",
+  "edit",
+  "memories",
+  "persona",
+  "personality",
+  "profile",
+  "search",
+  "suggest",
+  "talk",
+  "traits",
+]);
+
 for (const file of files) {
   const mod = (await import(path.join(commandsDir, file))) as { default: Command };
   const command = mod.default;
   if (command?.data?.toJSON) {
-    commands.push(command.data.toJSON());
+    const commandJson = command.data.toJSON() as Record<string, unknown>;
+    const supportsUserInstall = USER_INSTALL_COMMANDS.has(commandJson.name as string);
+
+    // Discord requires these fields on the global command payload for user
+    // installs. Keep server administration commands guild-only.
+    commandJson.integration_types = supportsUserInstall
+      ? [ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall]
+      : [ApplicationIntegrationType.GuildInstall];
+    commandJson.contexts = supportsUserInstall
+      ? [
+          InteractionContextType.Guild,
+          InteractionContextType.BotDM,
+          InteractionContextType.PrivateChannel,
+        ]
+      : [InteractionContextType.Guild];
+
+    commands.push(commandJson);
     console.log(`[Deploy] Queued: /${command.data.name}`);
   }
 }
 
 const rest = new REST({ version: "10" }).setToken(token);
 
-// If DISCORD_GUILD_ID is set, register instantly to that guild; otherwise register globally.
-const guildId = process.env.DISCORD_GUILD_ID;
+// Global is the safe default for a public bot. Use the explicitly named
+// override only when developing command changes against one test guild.
+const guildId = process.env.DISCORD_DEPLOY_GUILD_ID;
 
 let result: unknown[];
 if (guildId) {
-  // Clear any lingering global commands first to avoid duplicates in the UI
-  await rest.put(Routes.applicationCommands(clientId), { body: [] });
-  console.log("[Deploy] Cleared global commands.");
-
   console.log(`\n[Deploy] Registering ${commands.length} commands to guild ${guildId} (instant)...`);
   result = (await rest.put(Routes.applicationGuildCommands(clientId, guildId), {
     body: commands,
@@ -59,5 +91,5 @@ if (guildId) {
     body: commands,
   })) as unknown[];
   console.log(`[Deploy] ✓ Registered ${result.length} command(s) globally.`);
-  console.log("[Deploy] Note: Global commands can take up to 1 hour to propagate.");
+  console.log("[Deploy] Global commands are now available to other guild installs and eligible user installs.");
 }

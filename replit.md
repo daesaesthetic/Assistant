@@ -54,8 +54,15 @@ Detects spam (5 msgs/5s), excessive caps (>70%), and blacklisted words. Issues w
 1. Add secrets via Replit Secrets
 2. Enable **Message Content Intent** and **Server Members Intent** in Discord Developer Portal → Bot settings
 3. Start the bot workflow — it connects to Discord
-4. Run `pnpm --filter @workspace/discord-bot run deploy` once to register slash commands
-5. Global commands take up to 1 hour to propagate (use guild commands for instant testing)
+4. Run `pnpm --filter @workspace/discord-bot run deploy` once to register slash commands globally
+5. In the Discord Developer Portal, enable **User Install** under Installation and include both `bot` and `applications.commands` in the install link. Global commands can take up to 1 hour to propagate.
+
+## Installing in other servers
+
+- The deploy script registers commands globally; it no longer uses `DISCORD_GUILD_ID` to limit commands to the original server.
+- Conversation and utility commands support both **Guild Install** and **User Install** contexts.
+- Moderation and server configuration commands remain **Guild Install** only because they require a server and permissions.
+- After enabling User Install or changing the install link, remove and re-add the app in the destination server so Discord refreshes its command permissions.
 
 ## User preferences
 
