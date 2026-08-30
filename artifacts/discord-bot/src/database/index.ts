@@ -39,6 +39,47 @@ export interface ConversationMessage {
   content: string;
 }
 
+export type MemoryType =
+  | "preference"
+  | "interest"
+  | "project"
+  | "goal"
+  | "fact"
+  | "communication_style"
+  | "technical_context"
+  | "temporary_context";
+
+export interface MemoryRecord {
+  id: number;
+  content: string;
+  memoryType: MemoryType;
+  confidence: number;
+  source: string;
+  createdAt: number;
+  updatedAt: number;
+  lastUsedAt?: number;
+  expiresAt?: number;
+}
+
+export interface MemoryCandidate {
+  content: string;
+  memoryType?: MemoryType;
+  confidence?: number;
+  source?: string;
+  expiresAt?: number;
+}
+
+export interface UserPreference {
+  key: string;
+  value: string;
+  confidence: number;
+  evidenceCount: number;
+  source: string;
+  createdAt: number;
+  updatedAt: number;
+  lastUsedAt?: number;
+}
+
 interface LegacyJson {
   personas?: Record<string, Persona>;
   warnings?: Record<string, Warning>;
@@ -209,6 +250,48 @@ async function applySchema(db: SqliteDatabase): Promise<void> {
         await database.run(
           "UPDATE guild_config SET bot_name = ? WHERE bot_name IN ('Assistant', 'Azurion')",
           DEFAULT_BOT_NAME,
+        );
+      },
+    },
+    {
+      version: 3,
+      apply: async (database) => {
+        await database.exec(`
+          ALTER TABLE memories ADD COLUMN memory_type TEXT NOT NULL DEFAULT 'fact';
+          ALTER TABLE memories ADD COLUMN confidence REAL NOT NULL DEFAULT 0.7;
+          ALTER TABLE memories ADD COLUMN source TEXT NOT NULL DEFAULT 'conversation';
+          ALTER TABLE memories ADD COLUMN created_at INTEGER;
+          ALTER TABLE memories ADD COLUMN updated_at INTEGER;
+          ALTER TABLE memories ADD COLUMN last_used_at INTEGER;
+          ALTER TABLE memories ADD COLUMN expires_at INTEGER;
+
+          CREATE TABLE IF NOT EXISTS user_preferences (
+            user_id TEXT NOT NULL,
+            guild_id TEXT NOT NULL,
+            preference_key TEXT NOT NULL,
+            preference_value TEXT NOT NULL,
+            confidence REAL NOT NULL DEFAULT 0.5,
+            evidence_count INTEGER NOT NULL DEFAULT 1,
+            source TEXT NOT NULL DEFAULT 'inferred',
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            last_used_at INTEGER,
+            PRIMARY KEY (user_id, guild_id, preference_key),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (guild_id) REFERENCES guilds(id) ON DELETE CASCADE
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_preferences_user_guild
+            ON user_preferences(user_id, guild_id, confidence DESC);
+          CREATE INDEX IF NOT EXISTS idx_memories_retrieval
+            ON memories(user_id, guild_id, confidence DESC, updated_at DESC);
+        `);
+
+        const now = Date.now();
+        await database.run(
+          "UPDATE memories SET created_at = COALESCE(created_at, ?), updated_at = COALESCE(updated_at, ?)",
+          now,
+          now,
         );
       },
     },
@@ -560,6 +643,7 @@ async function validateDatabase(db: SqliteDatabase): Promise<void> {
     "guild_blacklisted_words",
     "guild_bot_channels",
     "legacy_conversations",
+    "user_preferences",
   ];
   const rows = await db.all<{ name: string }[]>(
     "SELECT name FROM sqlite_master WHERE type = 'table'"
@@ -721,38 +805,95 @@ export const db = {
     );
   },
 
-  async getMemories(userId: string, guildId: string): Promise<string[]> {
+  async getMemoryRecords(userId: string, guildId: string): Promise<MemoryRecord[]> {
     const database = await getDb();
-    const rows = await database.all<{ content: string }[]>(
-      "SELECT content FROM memories WHERE user_id = ? AND guild_id = ? ORDER BY id",
+    const rows = await database.all<MemoryRecord[]>(
+      `SELECT id, content, memory_type AS memoryType, confidence, source,
+              COALESCE(created_at, id) AS createdAt,
+              COALESCE(updated_at, created_at, id) AS updatedAt,
+              last_used_at AS lastUsedAt, expires_at AS expiresAt
+       FROM memories
+       WHERE user_id = ? AND guild_id = ?
+         AND (expires_at IS NULL OR expires_at > ?)
+       ORDER BY id`,
       userId,
       guildId
+      , Date.now()
     );
-    return rows.map((row) => row.content);
+    return rows;
   },
 
-  async addMemories(userId: string, guildId: string, facts: string[]): Promise<void> {
+  async getMemories(userId: string, guildId: string): Promise<string[]> {
+    return (await this.getMemoryRecords(userId, guildId)).map((memory) => memory.content);
+  },
+
+  async addMemoryCandidates(
+    userId: string,
+    guildId: string,
+    candidates: MemoryCandidate[],
+  ): Promise<void> {
     const database = await getDb();
     await ensureUserGuild(database, userId, guildId);
     await database.exec("BEGIN IMMEDIATE");
     try {
-      const current = await this.getMemories(userId, guildId);
-      for (const fact of facts) {
-        if (current.some((existing) => existing.toLowerCase() === fact.toLowerCase())) continue;
-        if (current.length >= 30) break;
-        await database.run(
-          "INSERT OR IGNORE INTO memories (user_id, guild_id, content) VALUES (?, ?, ?)",
+      const count = await database.get<{ count: number }>(
+        "SELECT COUNT(*) AS count FROM memories WHERE user_id = ? AND guild_id = ?",
+        userId,
+        guildId,
+      );
+      const currentCount = count?.count ?? 0;
+      for (const candidate of candidates) {
+        const content = candidate.content.trim();
+        if (!content || content.length > 500 || currentCount >= 30) break;
+        const exists = await database.get<{ id: number }>(
+          "SELECT id FROM memories WHERE user_id = ? AND guild_id = ? AND content = ? COLLATE NOCASE",
           userId,
           guildId,
-          fact
+          content,
         );
-        current.push(fact);
+        if (exists) continue;
+        await database.run(
+          `INSERT OR IGNORE INTO memories
+             (user_id, guild_id, content, memory_type, confidence, source, created_at, updated_at, expires_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          userId,
+          guildId,
+          content,
+          candidate.memoryType ?? "fact",
+          Math.max(0.1, Math.min(0.99, candidate.confidence ?? 0.7)),
+          candidate.source ?? "conversation",
+          Date.now(),
+          Date.now(),
+          candidate.expiresAt ?? null,
+        );
       }
       await database.exec("COMMIT");
     } catch (error) {
       await database.exec("ROLLBACK");
       throw error;
     }
+  },
+
+  async addMemories(userId: string, guildId: string, facts: string[]): Promise<void> {
+    await this.addMemoryCandidates(
+      userId,
+      guildId,
+      facts.map((content) => ({ content })),
+    );
+  },
+
+  async markMemoriesUsed(userId: string, guildId: string, ids: number[]): Promise<void> {
+    if (ids.length === 0) return;
+    const database = await getDb();
+    const placeholders = ids.map(() => "?").join(", ");
+    await database.run(
+      `UPDATE memories SET last_used_at = ?, updated_at = updated_at
+       WHERE user_id = ? AND guild_id = ? AND id IN (${placeholders})`,
+      Date.now(),
+      userId,
+      guildId,
+      ...ids,
+    );
   },
 
   async clearMemories(userId: string, guildId: string): Promise<void> {
@@ -859,6 +1000,113 @@ export const db = {
   async clearTraits(userId: string, guildId: string): Promise<void> {
     const database = await getDb();
     await database.run("DELETE FROM traits WHERE user_id = ? AND guild_id = ?", userId, guildId);
+  },
+
+  async getPreferences(userId: string, guildId: string): Promise<UserPreference[]> {
+    const database = await getDb();
+    return database.all<UserPreference[]>(
+      `SELECT preference_key AS key, preference_value AS value, confidence,
+              evidence_count AS evidenceCount, source,
+              created_at AS createdAt, updated_at AS updatedAt,
+              last_used_at AS lastUsedAt
+       FROM user_preferences
+       WHERE user_id = ? AND guild_id = ?
+       ORDER BY confidence DESC, updated_at DESC`,
+      userId,
+      guildId,
+    );
+  },
+
+  async recordPreferenceSignals(
+    userId: string,
+    guildId: string,
+    signals: Array<{
+      key: string;
+      value: string;
+      confidence: number;
+      source: string;
+    }>,
+  ): Promise<void> {
+    if (signals.length === 0) return;
+    const database = await getDb();
+    await ensureUserGuild(database, userId, guildId);
+    await database.exec("BEGIN IMMEDIATE");
+    try {
+      for (const signal of signals) {
+        const key = signal.key.trim();
+        const value = signal.value.trim();
+        if (!key || !value) continue;
+
+        const existing = await database.get<{
+          value: string;
+          confidence: number;
+          evidenceCount: number;
+        }>(
+          `SELECT preference_value AS value, confidence,
+                  evidence_count AS evidenceCount
+           FROM user_preferences
+           WHERE user_id = ? AND guild_id = ? AND preference_key = ?`,
+          userId,
+          guildId,
+          key,
+        );
+        const now = Date.now();
+        if (existing?.value.toLowerCase() === value.toLowerCase()) {
+          const confidence = Math.min(
+            0.98,
+            existing.confidence +
+              (1 - existing.confidence) * Math.min(0.25, Math.max(0.08, signal.confidence * 0.2)),
+          );
+          await database.run(
+            `UPDATE user_preferences
+             SET confidence = ?, evidence_count = evidence_count + 1,
+                 source = ?, updated_at = ?
+             WHERE user_id = ? AND guild_id = ? AND preference_key = ?`,
+            confidence,
+            signal.source,
+            now,
+            userId,
+            guildId,
+            key,
+          );
+        } else {
+          const confidence = Math.max(0.35, Math.min(0.9, signal.confidence * 0.75));
+          await database.run(
+            `INSERT INTO user_preferences
+              (user_id, guild_id, preference_key, preference_value, confidence,
+               evidence_count, source, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
+             ON CONFLICT(user_id, guild_id, preference_key) DO UPDATE SET
+               preference_value = excluded.preference_value,
+               confidence = excluded.confidence,
+               evidence_count = user_preferences.evidence_count + 1,
+               source = excluded.source,
+               updated_at = excluded.updated_at`,
+            userId,
+            guildId,
+            key,
+            value,
+            confidence,
+            signal.source,
+            now,
+            now,
+          );
+        }
+      }
+      await database.exec("COMMIT");
+    } catch (error) {
+      await database.exec("ROLLBACK");
+      throw error;
+    }
+  },
+
+  async clearPreferences(userId: string, guildId: string): Promise<void> {
+    const database = await getDb();
+    await database.run(
+      "DELETE FROM user_preferences WHERE user_id = ? AND guild_id = ?",
+      userId,
+      guildId,
+    );
   },
 
   async getBotName(guildId: string): Promise<string> {
