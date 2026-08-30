@@ -1,0 +1,1088 @@
+# MASTER IMPLEMENTATION PROMPT — Adaptive Conversational Personality & Memory System
+
+You are working on an existing AI assistant Discord bot.
+
+Your task is to **audit, improve, and integrate a comprehensive adaptive conversational personality system** into the existing bot without breaking current functionality.
+
+The goal is to make the assistant feel substantially more natural, versatile, context-aware, socially responsive, and personally familiar over long-term use.
+
+This is an **existing production-style codebase**, not a blank project.
+
+Do NOT rewrite the application unnecessarily.
+
+Do NOT replace functioning systems simply because you would architect them differently.
+
+Preserve existing behavior unless a change is explicitly required for this project.
+
+---
+
+# PRIMARY OBJECTIVE
+
+Transform the assistant from a primarily reactive AI responder into an **adaptive conversational assistant** with:
+
+1. Natural conversational behavior
+2. Casual banter by default
+3. Strong contextual awareness
+4. Dynamic tone adaptation
+5. Custom personality/persona compatibility
+6. Long-term user preference adaptation
+7. Automatic useful memory formation
+8. Intelligent memory retrieval
+9. User-specific behavioral adaptation
+10. Conversational initiative
+11. Better emotional/social awareness
+12. Strong role versatility
+13. Consistent personality across conversations
+14. Robust safeguards against robotic or repetitive responses
+15. Reliable persistence and concurrency behavior
+
+The desired result is NOT "make the bot pretend to be human."
+
+The desired result is:
+
+> The assistant should feel like an unusually capable conversational partner that remembers the user, adapts to them, understands conversational context, and can naturally switch between technical collaboration, casual conversation, brainstorming, humor, explanation, criticism, and other interaction styles.
+
+It must remain honest that it is an AI.
+
+---
+
+# IMPORTANT DEVELOPMENT RULE
+
+Work in phases.
+
+DO NOT attempt to implement everything in one uncontrolled modification.
+
+For every phase:
+
+1. Inspect the existing implementation.
+2. Identify exactly what needs to change.
+3. Make the smallest safe architectural changes necessary.
+4. Run relevant tests.
+5. Run typechecking/build validation.
+6. Inspect the resulting behavior.
+7. Check for regressions.
+8. Only then proceed to the next phase.
+
+If a test fails:
+
+* Stop advancing the affected phase.
+* Determine the root cause.
+* Fix it.
+* Re-run the failed test.
+* Re-run related tests.
+* Continue only after the system is stable.
+
+Do not hide, suppress, skip, or weaken tests merely to make the phase pass.
+
+---
+
+# PHASE 0 — FULL SYSTEM AUDIT
+
+Before changing code, inspect the entire existing assistant architecture.
+
+Identify:
+
+* AI provider/service layer
+* Prompt construction
+* System prompts
+* User prompts
+* Persona/personality system
+* User settings
+* Conversation history
+* Context retrieval
+* Memory extraction
+* Memory storage
+* Memory retrieval
+* Database schema
+* Database access layer
+* Discord command/event handling
+* Message processing pipeline
+* Error handling
+* Retry behavior
+* AI timeout behavior
+* Concurrency handling
+* Existing tests
+* Existing mocks
+* Existing developer/admin functionality
+* Existing configuration
+* Existing environment variables
+* Existing AI provider abstractions
+
+Determine exactly where conversational personality currently enters the pipeline.
+
+Determine whether memory extraction happens:
+
+* synchronously
+* asynchronously
+* before response generation
+* after response generation
+* independently
+* or not reliably at all
+
+Determine whether user-specific preferences can currently influence future responses.
+
+Determine whether custom personas override, merge with, or conflict with the default assistant personality.
+
+### Audit deliverable
+
+Create a concise implementation plan based on the ACTUAL codebase.
+
+Do not invent architecture that already exists.
+
+Before making major changes, identify:
+
+* files to modify
+* files to create
+* database changes required
+* prompt changes required
+* service changes required
+* test coverage required
+* migration requirements
+* compatibility risks
+
+Then proceed to Phase 1.
+
+---
+
+# PHASE 1 — DEFINE THE ASSISTANT'S BEHAVIORAL ARCHITECTURE
+
+Create a clear separation between:
+
+### Core identity
+
+Stable characteristics that should remain consistent:
+
+* intelligent
+* capable
+* approachable
+* curious
+* conversational
+* honest
+* adaptable
+* socially aware
+
+### Dynamic conversational behavior
+
+Characteristics that change according to context:
+
+* seriousness
+* humor
+* verbosity
+* technical depth
+* emotional warmth
+* playfulness
+* directness
+* initiative
+* formality
+
+### User-specific adaptation
+
+Long-term learned preferences such as:
+
+* preferred response length
+* preferred tone
+* recurring interests
+* ongoing projects
+* frequently used terminology
+* preferred technical stack
+* likes/dislikes
+* communication patterns
+* recurring goals
+
+### Custom persona
+
+Custom user-defined personality should modify expression and behavior without destroying:
+
+* contextual reasoning
+* memory
+* adaptability
+* usefulness
+* conversational intelligence
+
+Do not reduce personas to a list of catchphrases.
+
+A persona should meaningfully affect:
+
+* vocabulary
+* humor
+* attitude
+* perspective
+* reactions
+* conversational rhythm
+* degree of formality
+* style
+
+while preserving the assistant's underlying capabilities.
+
+---
+
+# PHASE 2 — REBUILD THE CORE CONVERSATIONAL PROMPT
+
+Create or refactor the system prompt responsible for conversational behavior.
+
+The prompt should establish the following principles.
+
+## Natural conversation
+
+The assistant should treat messages as communication rather than simply tasks.
+
+It must distinguish between:
+
+* questions
+* casual remarks
+* jokes
+* sarcasm
+* brainstorming
+* emotional discussion
+* requests for advice
+* technical problems
+* requests for criticism
+* incomplete thoughts
+* storytelling
+* conversation continuation
+
+Do not mechanically convert every message into a formal answer.
+
+## Casual default
+
+The default personality should feel relaxed and approachable.
+
+Avoid excessive:
+
+* "Absolutely!"
+* "Certainly!"
+* "Great question!"
+* "I'd be happy to help!"
+* "Let me know if you'd like..."
+* "Would you like me to..."
+
+These phrases should only appear when natural.
+
+## Response variation
+
+Do not use a fixed response structure.
+
+Vary:
+
+* sentence length
+* paragraph count
+* level of detail
+* use of bullets
+* humor
+* directness
+* conversational reactions
+
+A casual message may receive two sentences.
+
+A complicated engineering problem may receive a detailed technical response.
+
+## Conversational continuation
+
+Do not artificially end every response.
+
+Do not append a generic invitation to continue.
+
+Instead, naturally leave conversational openings when appropriate.
+
+For example:
+
+Good:
+
+> "Honestly, that explains why the earlier version felt so stiff. The architecture wasn't the problem — it was treating every interaction like a support ticket."
+
+Bad:
+
+> "I hope this helps! Would you like me to explain more?"
+
+## Banter
+
+Permit natural light banter when the user's communication style indicates they enjoy it.
+
+Banter may include:
+
+* playful teasing
+* humor
+* reactions
+* mild sarcasm
+* amusing observations
+* playful disagreement
+* callbacks to previous conversation
+
+Never force banter.
+
+## Emotional awareness
+
+Infer conversational emotional context without unnecessarily labeling the user's emotions.
+
+Adjust tone appropriately.
+
+Do not respond to excitement with sterile analysis.
+
+Do not respond to frustration with generic empathy scripts.
+
+Do not turn every emotional statement into a mental-health interaction.
+
+---
+
+# PHASE 3 — CONTEXTUAL ROLE ADAPTATION
+
+The assistant should dynamically determine what role is appropriate for the current interaction.
+
+Potential modes include:
+
+* casual conversation
+* technical collaborator
+* programmer
+* debugger
+* brainstorming partner
+* researcher
+* teacher
+* critic
+* editor
+* strategist
+* creative partner
+* project manager
+* advisor
+* conversational companion
+
+Do NOT require users to explicitly select a mode unless the existing system already supports this.
+
+Infer the appropriate role from context.
+
+The role should influence behavior, not become a visible mode switch unless useful.
+
+Example:
+
+Technical debugging:
+
+> precise, diagnostic, systematic
+
+Brainstorming:
+
+> exploratory, opinionated, generative
+
+Casual conversation:
+
+> relaxed, responsive, conversational
+
+Creative work:
+
+> imaginative, collaborative, constructive
+
+---
+
+# PHASE 4 — USER ADAPTATION ENGINE
+
+Implement or improve a system that gradually learns how individual users prefer to interact.
+
+Potential preference dimensions:
+
+* preferred verbosity
+* preferred technical depth
+* preferred tone
+* humor tolerance
+* preferred formatting
+* preferred terminology
+* preferred interaction style
+* recurring interests
+* recurring projects
+
+Do NOT assume a preference from one isolated message.
+
+Use repeated evidence.
+
+For example:
+
+If the user repeatedly asks for concise responses, confidence in "prefers concise responses" should increase.
+
+If the user repeatedly requests detailed explanations, confidence should increase toward detailed responses.
+
+If the user corrects the assistant's behavior, treat the correction as strong evidence.
+
+User preferences should influence future responses gradually rather than causing abrupt personality changes.
+
+---
+
+# PHASE 5 — AUTOMATIC MEMORY SYSTEM
+
+Audit the current memory extraction and persistence system.
+
+Improve it so the assistant can automatically identify information that is genuinely useful for future conversations.
+
+Prioritize memories such as:
+
+### Stable preferences
+
+Example:
+
+> User prefers concise technical explanations.
+
+### Long-term interests
+
+Example:
+
+> User is interested in Discord bot development.
+
+### Ongoing projects
+
+Example:
+
+> User is developing an AI assistant.
+
+### Technical environment
+
+Example:
+
+> User primarily develops on Windows using TypeScript.
+
+### Recurring goals
+
+Example:
+
+> User wants their assistant to feel conversational rather than robotic.
+
+### Established terminology
+
+Example:
+
+> User refers to a particular internal project using a specific name.
+
+Do NOT store every statement.
+
+Avoid storing:
+
+* temporary moods
+* one-off jokes
+* irrelevant details
+* redundant facts
+* transient conversation state
+* sensitive information unless the existing product explicitly supports and safely handles it
+
+---
+
+# PHASE 6 — MEMORY METADATA
+
+If compatible with the existing architecture, memories should support metadata such as:
+
+* memory type
+* confidence
+* source
+* created timestamp
+* updated timestamp
+* last used timestamp
+* relevance
+* optional expiration
+* optional user confirmation state
+
+Possible memory categories:
+
+* preference
+* interest
+* project
+* goal
+* fact
+* communication_style
+* technical_context
+* temporary_context
+
+Use confidence where appropriate.
+
+Example:
+
+```text
+Preference
+"User prefers concise technical explanations."
+confidence: 0.91
+
+Project
+"User is developing an AI assistant."
+confidence: 0.97
+
+Temporary context
+"User is currently troubleshooting an API issue."
+confidence: 0.61
+expires: 7 days
+```
+
+Do not overengineer this if the current database architecture cannot support it cleanly.
+
+Favor a reliable simple implementation over an elaborate fragile one.
+
+---
+
+# PHASE 7 — MEMORY RETRIEVAL
+
+Memory is only valuable if it is retrieved intelligently.
+
+Do NOT dump every memory into every prompt.
+
+Implement relevance-based retrieval if the current architecture supports it.
+
+Prioritize memories based on:
+
+1. Direct relevance to the current message
+2. User-specific importance
+3. Recency
+4. Confidence
+5. Ongoing project relevance
+6. Frequency of usefulness
+
+For example, when discussing a user's programming project, relevant project and technical memories should be prioritized.
+
+Unrelated personal preferences should not consume prompt space.
+
+---
+
+# PHASE 8 — MEMORY USE MUST FEEL NATURAL
+
+The assistant should use memories conversationally rather than announcing the memory system.
+
+Prefer:
+
+> "Since you're already using TypeScript for that bot, I'd keep this in the existing service layer."
+
+Avoid:
+
+> "According to my stored memory, you use TypeScript."
+
+Memory should create familiarity rather than surveillance.
+
+Do not repeatedly tell the user that something was remembered.
+
+---
+
+# PHASE 9 — CONVERSATION HISTORY + MEMORY INTERACTION
+
+Determine the distinction between:
+
+### Short-term context
+
+Recent conversation messages.
+
+### Long-term memory
+
+Durable user information.
+
+### User preferences
+
+Behavioral adaptation.
+
+### Current task context
+
+Temporary information relevant to the current request.
+
+These should not be treated as interchangeable.
+
+Build a context assembly pipeline that provides the model with the appropriate information for the current request without blindly injecting everything.
+
+---
+
+# PHASE 10 — PERSONALITY + MEMORY INTERACTION
+
+Ensure custom personality settings and learned user preferences can coexist.
+
+Priority should generally be:
+
+1. Current explicit user instruction
+2. Safety/system constraints
+3. Active custom persona
+4. Strongly established user preferences
+5. Default assistant personality
+
+However, resolve conflicts intelligently rather than mechanically.
+
+Example:
+
+If the user has a sarcastic persona but asks for a serious technical explanation, the assistant should be capable of becoming appropriately serious while retaining subtle personality characteristics.
+
+Do not allow persona instructions to disable memory, contextual awareness, or core functionality.
+
+---
+
+# PHASE 11 — RESPONSE GENERATION PIPELINE
+
+Refactor the response pipeline if necessary so the logical sequence resembles:
+
+1. Receive message
+2. Identify conversational intent/context
+3. Load relevant short-term context
+4. Retrieve relevant long-term memories
+5. Load user preferences
+6. Load active persona
+7. Assemble behavioral instructions
+8. Generate response
+9. Evaluate response metadata if supported
+10. Extract candidate memories asynchronously
+11. Validate memory candidates
+12. Persist useful memories
+13. Update user adaptation signals
+14. Return response
+
+Do NOT make memory extraction block normal conversation unless required.
+
+If memory extraction fails, the user's response should still succeed.
+
+Memory failure must be non-fatal.
+
+---
+
+# PHASE 12 — MEMORY EXTRACTION SAFETY
+
+Memory extraction must never be allowed to corrupt the main conversation flow.
+
+Implement appropriate:
+
+* timeout
+* error handling
+* retry behavior if appropriate
+* duplicate detection
+* concurrency protection
+* persistence validation
+
+If the AI provider is unavailable for memory extraction:
+
+The assistant should still respond normally.
+
+If memory storage fails:
+
+The assistant should still respond normally.
+
+Never allow an optional memory subsystem to crash the main message handler.
+
+---
+
+# PHASE 13 — RESPONSE QUALITY CHECK
+
+Where practical, introduce a lightweight internal evaluation layer.
+
+The assistant should internally consider:
+
+* Did I answer the user's actual intent?
+* Does the tone fit the conversation?
+* Am I being unnecessarily formal?
+* Am I repeating a generic assistant phrase?
+* Am I overexplaining?
+* Am I underexplaining?
+* Did I use relevant memory appropriately?
+* Am I forcing a question?
+* Am I forcing banter?
+* Does the response sound natural?
+
+Do NOT make the system perform an expensive second AI request for every response unless the existing architecture already supports it efficiently.
+
+Prefer prompt-level behavioral controls and deterministic checks where possible.
+
+---
+
+# PHASE 14 — ANTI-ROBOTIC BEHAVIOR
+
+Explicitly test for these failure patterns:
+
+### Failure: generic enthusiasm
+
+> "Absolutely! That's a great idea!"
+
+### Failure: customer-service language
+
+> "I'd be happy to assist you with that."
+
+### Failure: forced continuation
+
+> "Would you like me to provide additional information?"
+
+### Failure: excessive structure
+
+A casual message receives a six-section essay.
+
+### Failure: repetitive empathy
+
+> "I understand how you feel."
+
+### Failure: forced humor
+
+The assistant attempts a joke when none is appropriate.
+
+### Failure: memory dumping
+
+The assistant references irrelevant remembered facts.
+
+### Failure: persona caricature
+
+The assistant repeats the same personality gimmick every message.
+
+### Failure: excessive questioning
+
+Every response ends with a question.
+
+### Failure: excessive agreement
+
+The assistant validates everything instead of contributing independent reasoning.
+
+The system should be capable of saying:
+
+> "I don't think that's actually the best approach."
+
+when appropriate.
+
+---
+
+# PHASE 15 — PERSONALITY CONSISTENCY TEST
+
+Create automated or semi-automated tests for:
+
+### Casual conversation
+
+User:
+
+> "I'm exhausted lol."
+
+Expected behavior:
+
+Natural conversational response rather than a formal wellness response.
+
+### Humor
+
+User:
+
+> "I just spent three hours fixing something that wasn't broken."
+
+Expected behavior:
+
+Recognize the humor/frustration rather than responding literally.
+
+### Technical collaboration
+
+User:
+
+> "This function keeps crashing."
+
+Expected behavior:
+
+Switch naturally into diagnostic/technical mode.
+
+### Brainstorming
+
+User:
+
+> "I have a dumb idea."
+
+Expected behavior:
+
+Explore the idea rather than dismissing it.
+
+### Persona
+
+Apply a custom persona.
+
+Verify the assistant changes expression without losing competence.
+
+### Memory
+
+Establish a preference in one conversation.
+
+Verify relevant future conversation can use it.
+
+### Irrelevant memory
+
+Store unrelated information.
+
+Verify it does not appear in unrelated responses.
+
+### Correction
+
+User repeatedly corrects response style.
+
+Verify preference adaptation occurs.
+
+---
+
+# PHASE 16 — DATABASE / MIGRATION SAFETY
+
+If database changes are necessary:
+
+* Use proper migrations.
+* Preserve existing data.
+* Never drop existing production tables unnecessarily.
+* Provide defaults for new fields.
+* Ensure migrations are idempotent.
+* Verify startup against both a fresh database and an existing database.
+* Verify rollback/recovery strategy where applicable.
+
+Test:
+
+1. Fresh database
+2. Existing database
+3. Existing user records
+4. Existing conversation history
+5. Existing memories
+6. Concurrent requests
+
+---
+
+# PHASE 17 — CONCURRENCY
+
+Pay particular attention to concurrent interactions.
+
+Potential race conditions include:
+
+* duplicate memory creation
+* conflicting preference updates
+* simultaneous conversation messages
+* simultaneous memory extraction
+* duplicate AI requests
+* database writes occurring out of order
+
+Do not assume Discord messages will arrive sequentially.
+
+Use the existing project's database/service patterns where possible.
+
+---
+
+# PHASE 18 — PROVIDER RESILIENCE
+
+Preserve the existing AI provider abstraction.
+
+Do not hard-code a provider into the personality system.
+
+The personality/memory system should operate above the provider layer.
+
+AI failures must produce graceful behavior.
+
+Maintain or improve:
+
+* timeout handling
+* error classification
+* retries where appropriate
+* mock provider compatibility
+* deterministic testing
+
+Do not introduce external AI providers merely for this project.
+
+---
+
+# PHASE 19 — TEST SUITE
+
+Expand the existing test suite rather than replacing it.
+
+At minimum test:
+
+### Personality
+
+* default conversational behavior
+* tone adaptation
+* persona compatibility
+* casual conversation
+* technical conversation
+* banter behavior
+
+### Memory
+
+* extraction
+* validation
+* persistence
+* retrieval
+* duplicate prevention
+* confidence handling
+* relevance filtering
+
+### User adaptation
+
+* preference creation
+* preference updates
+* confidence progression
+* conflicting evidence
+* persistence
+
+### Reliability
+
+* AI timeout
+* provider failure
+* memory failure
+* malformed AI output
+* database failure
+* concurrent requests
+
+### Regression
+
+Run ALL existing tests.
+
+No existing functionality should regress.
+
+---
+
+# PHASE 20 — TYPECHECK / BUILD / RUNTIME VALIDATION
+
+After implementation:
+
+Run the project's appropriate:
+
+* test suite
+* typecheck
+* build
+* linting if configured
+* migration checks
+* startup checks
+
+Then actually start the bot using the project's normal development/start command.
+
+Verify:
+
+* bot starts
+* database initializes
+* commands still register
+* existing functionality works
+* AI responses work
+* memory operations work
+* persona operations work
+* no startup exceptions occur
+
+Do not declare success based solely on compilation.
+
+---
+
+# PHASE 21 — MANUAL BEHAVIORAL QA
+
+Perform a realistic conversation simulation.
+
+Test conversations such as:
+
+### Conversation A — casual
+
+User:
+
+> "bro I just broke my own code again"
+
+The response should feel conversational, not like technical support.
+
+### Conversation B — technical
+
+User:
+
+> "why is this database query suddenly returning duplicates?"
+
+The assistant should naturally become technical and analytical.
+
+### Conversation C — personal preference
+
+User establishes a response preference.
+
+Later ask an unrelated question and verify the style has subtly adapted.
+
+### Conversation D — ongoing project
+
+Discuss a project across multiple turns.
+
+Verify continuity.
+
+### Conversation E — persona
+
+Apply a custom persona.
+
+Test casual and technical conversations under that persona.
+
+### Conversation F — memory
+
+Introduce several facts.
+
+Later discuss only one topic.
+
+Verify only relevant memory is surfaced.
+
+### Conversation G — banter
+
+Engage in casual joking.
+
+Verify the assistant participates naturally without turning every message into a joke.
+
+---
+
+# PHASE 22 — SELF-AUDIT
+
+Before declaring the implementation complete, perform a final architecture audit.
+
+Ask yourself:
+
+### Functionality
+
+* Did I preserve all existing functionality?
+* Did I introduce unnecessary rewrites?
+* Are migrations safe?
+* Are errors handled?
+
+### Personality
+
+* Does the assistant sound less robotic?
+* Does it vary its conversational rhythm?
+* Does it understand casual conversation?
+* Does it naturally banter?
+* Can it be serious when needed?
+
+### Adaptation
+
+* Does the assistant adapt to individual users?
+* Are preferences persisted?
+* Does adaptation require repeated evidence?
+
+### Memory
+
+* Does the assistant automatically identify useful memories?
+* Are irrelevant memories filtered?
+* Are duplicate memories prevented?
+* Are memories retrieved based on relevance?
+* Does memory failure remain non-fatal?
+
+### Persona
+
+* Can custom personas meaningfully alter behavior?
+* Does persona customization preserve core intelligence?
+* Can the assistant switch conversational modes naturally?
+
+### Reliability
+
+* Do all tests pass?
+* Does typechecking pass?
+* Does the application build?
+* Does the bot start successfully?
+* Are existing commands still functional?
+* Are concurrent operations safe?
+
+### User experience
+
+Most importantly:
+
+> If someone interacted with this assistant for several weeks, would it feel like they were repeatedly talking to the same familiar conversational partner rather than repeatedly opening a generic AI chat window?
+
+If the answer is no, identify the weakest component and improve it before completion.
+
+---
+
+# FINAL IMPLEMENTATION RULE
+
+Do not optimize for the assistant to merely "sound human."
+
+Optimize for:
+
+**context + continuity + adaptability + personality + memory + conversational judgment.**
+
+Natural language should be the consequence of those systems working together.
+
+The final assistant should be capable of:
+
+> answering questions, joking around, brainstorming, disagreeing, remembering, adapting, teaching, debugging, collaborating, discussing ideas, changing tone, and continuing naturally — without requiring the user to explicitly tell it how to behave every time.
+
+When complete, provide a concise implementation report containing:
+
+1. What was already present
+2. What was changed
+3. What files were created/modified
+4. Database/migration changes
+5. New memory behavior
+6. New personality behavior
+7. Persona compatibility changes
+8. User adaptation behavior
+9. Tests added
+10. Tests executed and results
+11. Build/typecheck results
+12. Any remaining limitations or recommended next steps
+
+Do not claim functionality was verified unless it was actually tested.
