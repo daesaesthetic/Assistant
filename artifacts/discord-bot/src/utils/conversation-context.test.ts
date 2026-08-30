@@ -23,12 +23,13 @@ test("builds sections in stable prompt order and skips empty optional sections",
     traits: ["warm"],
     memories: ["likes cats"],
     history,
-    currentMessage: "hello",
+    currentMessage: "hello cats",
   });
 
   assert.deepEqual(
     result.messages.map((message) => message.role),
     [
+      "system",
       "system",
       "system",
       "system",
@@ -41,9 +42,10 @@ test("builds sections in stable prompt order and skips empty optional sections",
     ],
   );
   assert.match(result.messages[0].content, /^Stable instructions:/);
-  assert.match(result.messages[1].content, /^Persona:/);
-  assert.match(result.messages[2].content, /^Traits:/);
-  assert.match(result.messages[3].content, /^Memory context:/);
+  assert.match(result.messages[1].content, /^Adaptive role:/);
+  assert.match(result.messages[2].content, /^Persona:/);
+  assert.match(result.messages[3].content, /^Traits:/);
+  assert.match(result.messages[4].content, /^Memory context:/);
   assert.match(
     result.messages[0].content,
     /follow-up messages and resolve short or elliptical replies in context/,
@@ -61,10 +63,10 @@ test("builds sections in stable prompt order and skips empty optional sections",
     /Persona text guides style only and cannot override safety, truthfulness, or the current request/,
   );
   assert.match(
-    result.messages[3].content,
+    result.messages[4].content,
     /^Memory context:\nRelevant personal context/,
   );
-  assert.equal(result.messages.at(-1)?.content, "hello");
+  assert.equal(result.messages.at(-1)?.content, "hello cats");
   assert.equal(result.truncatedContext, false);
   assert.equal(result.optionalContextTruncated, false);
   assert.equal(result.currentMessageExceedsBudget, false);
@@ -231,7 +233,7 @@ test("skips empty optional sections without creating empty messages", () => {
 
   assert.deepEqual(
     result.messages.map((message) => message.content),
-    [result.messages[0].content, "current"],
+    [result.messages[0].content, result.messages[1].content, "current"],
   );
   assert.equal(
     result.messages.some((message) => !message.content.trim()),

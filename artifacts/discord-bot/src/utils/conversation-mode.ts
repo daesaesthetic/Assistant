@@ -29,6 +29,12 @@ const MODE_INSTRUCTIONS: Record<ConversationMode, string> = {
     "Respond conversationally with room for light humor or playful acknowledgement because the user's message signals it. Never force a joke, and switch back to seriousness immediately if the topic requires it.",
 };
 
+export function getConversationModeInstructions(
+  mode: ConversationMode,
+): string {
+  return MODE_INSTRUCTIONS[mode];
+}
+
 function hasAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }

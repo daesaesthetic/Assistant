@@ -7,7 +7,17 @@
  * Persisted history is never changed while building a request.
  */
 
-import { selectRelevantMemories } from "./memory-relevance.js";
+import {
+  selectRelevantMemories,
+  selectRelevantMemoryRecords,
+} from "./memory-relevance.js";
+import type { MemoryRecord, UserPreference } from "../database/index.js";
+import {
+  inferConversationMode,
+  getConversationModeInstructions,
+  type ConversationMode,
+} from "./conversation-mode.js";
+import { formatUserPreferences } from "./user-adaptation.js";
 
 export const CONTEXT_TOKEN_BUDGET = 14_000;
 export const RESERVED_OUTPUT_TOKENS = 1_200;
@@ -18,6 +28,8 @@ const ESTIMATED_CHARS_PER_TOKEN = 3.5;
 const STABLE_INSTRUCTIONS_MAX_TOKENS = 2_000;
 const RECENT_HISTORY_MAX_TOKENS = 7_500;
 const PERSONA_MAX_TOKENS = 1_200;
+const MODE_MAX_TOKENS = 700;
+const PREFERENCES_MAX_TOKENS = 800;
 const TRAITS_MAX_TOKENS = 800;
 const MEMORY_MAX_TOKENS = 1_400;
 
@@ -38,7 +50,9 @@ export type ConversationContextInput = {
     customDescription?: string;
   };
   traits?: string[];
-  memories?: string[];
+  memories?: string[] | MemoryRecord[];
+  userPreferences?: UserPreference[];
+  conversationMode?: ConversationMode;
   history: ConversationHistoryMessage[];
   currentMessage: string;
 };
@@ -52,6 +66,7 @@ export type ConversationContextResult = {
   truncatedContext: boolean;
   optionalContextTruncated: boolean;
   currentMessageExceedsBudget: boolean;
+  selectedMemoryIds: number[];
 };
 
 const PERSONAS: Record<string, string> = {
@@ -123,7 +138,7 @@ function boundMessage(
 }
 
 function buildStableInstructions(botName: string): string {
-  return `You are ${botName}, a highly capable personal assistant and multifunctional chat companion. When no persona is active, your default presence is composed, perceptive, warm beneath the edge, and slightly mysterious. You are concise when the task is simple and thorough when the task deserves depth. Never break character. Never mention being an AI, a language model, or underlying technology. Respond as ${botName} at all times.
+  return `You are ${botName}, a highly capable personal assistant and multifunctional chat companion. When no persona is active, your default presence is relaxed, perceptive, approachable, and warm. You are concise when the task is simple and thorough when the task deserves depth. Never pretend to be human or claim experiences you do not have. If asked about your nature, capabilities, or limitations, answer honestly that you are an AI assistant. Respond as ${botName} at all times.
 
 Treat each message as part of an ongoing collaboration. Use recent conversation to understand follow-up messages and resolve short or elliptical replies in context, including pronouns, shorthand, and typos. Preserve constraints, decisions, and unanswered threads from context. If the request is ambiguous, state the most likely interpretation and ask one focused question rather than guessing. If it has multiple parts, handle every part and label the answer clearly. Think through the problem privately, then provide the useful conclusion, reasoning, steps, examples, or caveats the user needs — never expose hidden chain-of-thought.
 
@@ -144,6 +159,14 @@ Your capabilities — when a user asks what you can do, draw from this list natu
 • Memory: you remember facts the user shares and surface them naturally; users can view or clear them (/memories)
 • Bot name: server admins can rename you per-server (/name set)
 • Conversation channels: admins can create a dedicated channel where you reply to every message freely, no command needed (/channel create)`;
+}
+
+function buildMode(mode: ConversationMode): string {
+  const instructions = getConversationModeInstructions(mode);
+  return `Contextual role for this message (${mode}):
+${instructions}
+
+Treat this as guidance, not a visible mode label. Switch naturally when the user's intent changes.`;
 }
 
 function buildPersona(persona?: ConversationContextInput["persona"]): string {
@@ -174,8 +197,12 @@ function buildTraits(traits: string[] = []): string {
     : "";
 }
 
-function buildMemories(memories: string[] = []): string {
-  const values = memories.map((memory) => memory.trim()).filter(Boolean);
+function buildMemories(memories: Array<string | MemoryRecord> = []): string {
+  const values = memories
+    .map((memory) =>
+      (typeof memory === "string" ? memory : memory.content).trim(),
+    )
+    .filter(Boolean);
   return values.length
     ? `Relevant personal context — use only when it materially helps the current answer, and never announce or recite it:\n${values.map((memory) => `- ${memory}`).join("\n")}`
     : "";
@@ -285,19 +312,47 @@ export function buildConversationContext(
     "Stable instructions:",
     buildStableInstructions(input.botName),
   );
-  const persona = sectionMessage("Persona:", buildPersona(input.persona));
-  const traits = sectionMessage("Traits:", buildTraits(input.traits));
-  const selectedMemories = selectRelevantMemories(
-    input.memories,
-    input.currentMessage,
+  const conversationMode =
+    input.conversationMode ?? inferConversationMode(input.currentMessage).mode;
+  const mode = sectionMessage(
+    "Adaptive role:",
+    buildMode(conversationMode),
   );
+  const persona = sectionMessage("Persona:", buildPersona(input.persona));
+  const preferences = sectionMessage(
+    "User adaptation:",
+    formatUserPreferences(input.userPreferences),
+  );
+  const traits = sectionMessage("Traits:", buildTraits(input.traits));
+  const rawMemories = input.memories ?? [];
+  const memoryRecords = rawMemories.filter(
+    (memory): memory is MemoryRecord => typeof memory !== "string",
+  );
+  const selectedMemoryRecords =
+    memoryRecords.length === rawMemories.length
+      ? selectRelevantMemoryRecords(memoryRecords, input.currentMessage)
+      : selectRelevantMemories(
+          rawMemories.filter(
+            (memory): memory is string => typeof memory === "string",
+          ),
+          input.currentMessage,
+        ).map((content, index) => ({
+          id: index,
+          content,
+          memoryType: "fact" as const,
+          confidence: 0.7,
+          source: "legacy",
+          createdAt: index,
+          updatedAt: index,
+        }));
   const memories = sectionMessage(
     "Memory context:",
-    buildMemories(selectedMemories),
+    buildMemories(selectedMemoryRecords),
   );
   let truncatedContext = false;
   let optionalContextTruncated = false;
   const boundedStable: ContextChatMessage[] = [];
+  const boundedOptional: ContextChatMessage[] = [];
 
   if (stable) {
     const bounded = boundMessage(
@@ -312,9 +367,23 @@ export function buildConversationContext(
     optionalContextTruncated ||= bounded.truncated;
   }
 
-  // Allocation follows the reduction priority: stable instructions, newest
-  // history, then persona, traits, and memory. Final message ordering remains
-  // stable/persona/traits/memory/history/current for prompt compatibility.
+  if (mode) {
+    const bounded = boundMessage(
+      mode,
+      Math.min(remaining, MODE_MAX_TOKENS),
+    );
+    if (bounded.message) {
+      boundedOptional.push(bounded.message);
+      remaining -= estimateContextTokens(bounded.message);
+    }
+    truncatedContext ||= bounded.truncated;
+    optionalContextTruncated ||= bounded.truncated;
+  }
+
+  // Allocation follows the reduction priority: stable instructions, inferred
+  // role, newest history, then persona, preferences, traits, and memory.
+  // Final message ordering remains stable/role/persona/preferences/traits/
+  // memory/history/current for prompt compatibility.
   const historyResult = selectHistory(
     input.history,
     Math.min(remaining, RECENT_HISTORY_MAX_TOKENS),
@@ -326,10 +395,10 @@ export function buildConversationContext(
 
   const optionalSections = [
     [persona, PERSONA_MAX_TOKENS],
+    [preferences, PREFERENCES_MAX_TOKENS],
     [traits, TRAITS_MAX_TOKENS],
     [memories, MEMORY_MAX_TOKENS],
   ] as const;
-  const boundedOptional: ContextChatMessage[] = [];
   for (const [section, allocation] of optionalSections) {
     if (!section) continue;
     const bounded = boundMessage(section, Math.min(remaining, allocation));
@@ -361,5 +430,8 @@ export function buildConversationContext(
       estimatedInputTokens + RESERVED_OUTPUT_TOKENS > CONTEXT_TOKEN_BUDGET,
     optionalContextTruncated,
     currentMessageExceedsBudget: currentCost > INPUT_TOKEN_BUDGET,
+    selectedMemoryIds: selectedMemoryRecords
+      .map((memory) => memory.id)
+      .filter((id) => id > 0),
   };
 }

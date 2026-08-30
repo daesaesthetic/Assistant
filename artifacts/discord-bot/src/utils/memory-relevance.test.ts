@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   MAX_CONTEXT_MEMORIES,
   MEMORY_FALLBACK_COUNT,
+  selectRelevantMemoryRecords,
   selectRelevantMemories,
 } from "./memory-relevance.js";
 
@@ -44,7 +45,7 @@ test("relevance outranks recency", () => {
   assert.equal(selected.includes("works in finance"), false);
 });
 
-test("uses a bounded recent fallback when there is no lexical match", () => {
+test("omits memories when there is no meaningful lexical match", () => {
   const memories = Array.from({ length: 10 }, (_, index) => `fact ${index}`);
   const selected = selectRelevantMemories(
     memories,
@@ -52,7 +53,7 @@ test("uses a bounded recent fallback when there is no lexical match", () => {
   );
 
   assert.equal(selected.length, MEMORY_FALLBACK_COUNT);
-  assert.deepEqual(selected, ["fact 7", "fact 8", "fact 9"]);
+  assert.deepEqual(selected, []);
 });
 
 test("deduplicates memories and never exceeds the selection limit", () => {
@@ -76,8 +77,33 @@ test("deduplicates memories and never exceeds the selection limit", () => {
 
 test("handles empty memories and empty messages", () => {
   assert.deepEqual(selectRelevantMemories([], "hello"), []);
-  assert.deepEqual(selectRelevantMemories(["first fact", "second fact"], ""), [
-    "first fact",
-    "second fact",
-  ]);
+  assert.deepEqual(selectRelevantMemories(["first fact", "second fact"], ""), []);
+});
+
+test("metadata strengthens relevant memories without making unrelated ones relevant", () => {
+  const selected = selectRelevantMemoryRecords(
+    [
+      {
+        id: 1,
+        content: "User is building a Discord bot",
+        memoryType: "project",
+        confidence: 0.95,
+        source: "conversation",
+        createdAt: 1,
+        updatedAt: 10,
+      },
+      {
+        id: 2,
+        content: "User likes jazz",
+        memoryType: "interest",
+        confidence: 0.99,
+        source: "conversation",
+        createdAt: 1,
+        updatedAt: 99,
+      },
+    ],
+    "How should I structure my Discord bot?",
+  );
+
+  assert.deepEqual(selected.map((memory) => memory.id), [1]);
 });

@@ -21,7 +21,7 @@ A fully modular Discord bot built with discord.js v14. Features slash commands, 
 
 - `artifacts/discord-bot/src/commands/` — one file per slash command
 - `artifacts/discord-bot/src/events/` — Discord event handlers
-- `artifacts/discord-bot/src/utils/` — Groq client, context engine, themed embeds, cooldowns, search
+- `artifacts/discord-bot/src/utils/` — Groq client, adaptive context engine, conversation modes, preference learning, themed embeds, cooldowns, search
 - `artifacts/discord-bot/src/database/index.ts` — SQLite-backed database abstraction
 - `artifacts/discord-bot/data/` — runtime database directory, created and initialized on first startup
 
@@ -29,12 +29,13 @@ A fully modular Discord bot built with discord.js v14. Features slash commands, 
 
 | Command     | Description                                 | Cooldown |
 | ----------- | ------------------------------------------- | -------- |
-| `/talk`     | AI conversation with memory and persona     | 5s       |
+| `/talk`     | AI conversation with adaptive context, memory, and persona | 5s       |
 | `/suggest`  | Smart suggestions, supports image input     | 10s      |
 | `/edit`     | AI image transformation via Pollinations    | 30s      |
 | `/persona`  | Set conversation style (5 presets + custom) | —        |
 | `/search`   | Web search via DuckDuckGo                   | 10s      |
 | `/profile`  | User profile with tracked stats             | —        |
+| `/memories` | View or clear remembered context and learned preferences | —        |
 | `/say`      | Bot sends a message                         | —        |
 | `/commands` | Command list                                | —        |
 | `/credits`  | Creator info                                | —        |
@@ -66,7 +67,7 @@ Detects spam (5 msgs/5s), excessive caps (>70%), and blacklisted words. Issues w
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+The bot learns conservative communication preferences from repeated or explicit signals within the current user + server boundary. Current requests and safety constraints always override learned preferences. Use `/memories view` to inspect remembered facts and learned preferences, or `/memories clear` to remove both.
 
 ## Gotchas
 
@@ -75,6 +76,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 - The `GuildMembers` privileged intent is required for `/profile` and member timeouts
 - SQLite schema migrations are tracked in `schema_migrations` and applied sequentially at startup before Discord login.
 - Conversation history is scoped to USER + GUILD. `/talk reset` clears only the current user's conversation in the current guild.
+- Memory retrieval is relevance-ranked and does not inject unrelated recent memories as a fallback.
+- Conversation memory extraction runs in the background with a bounded timeout, so provider or persistence failures do not block the primary reply.
 
 ## SQLite rollback procedure
 

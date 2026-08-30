@@ -817,8 +817,8 @@ export const db = {
          AND (expires_at IS NULL OR expires_at > ?)
        ORDER BY id`,
       userId,
-      guildId
-      , Date.now()
+      guildId,
+      Date.now(),
     );
     return rows;
   },
@@ -841,7 +841,7 @@ export const db = {
         userId,
         guildId,
       );
-      const currentCount = count?.count ?? 0;
+      let currentCount = count?.count ?? 0;
       for (const candidate of candidates) {
         const content = candidate.content.trim();
         if (!content || content.length > 500 || currentCount >= 30) break;
@@ -866,6 +866,7 @@ export const db = {
           Date.now(),
           candidate.expiresAt ?? null,
         );
+        currentCount += 1;
       }
       await database.exec("COMMIT");
     } catch (error) {

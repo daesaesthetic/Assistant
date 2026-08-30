@@ -18,6 +18,13 @@ import {
   validateConversationContext,
   type ConversationHistoryMessage,
 } from "./conversation-context.js";
+import {
+  inferConversationMode,
+} from "./conversation-mode.js";
+import {
+  detectPreferenceSignals,
+} from "./user-adaptation.js";
+import type { MemoryCandidate, MemoryType } from "../database/index.js";
 // Conservative bound for one concise user fact; reject longer candidates.
 const MAX_MEMORY_LENGTH = 500;
 
@@ -49,7 +56,25 @@ type MemoryExtractionDependencies = {
     guildId: string,
     facts: string[],
   ) => Promise<void>;
+  addMemoryCandidates?: (
+    userId: string,
+    guildId: string,
+    candidates: MemoryCandidate[],
+  ) => Promise<void>;
+  memoryExtractionTimeoutMs?: number;
 };
+
+const MEMORY_EXTRACTION_TIMEOUT_MS = 10_000;
+const MEMORY_TYPES = new Set<MemoryType>([
+  "preference",
+  "interest",
+  "project",
+  "goal",
+  "fact",
+  "communication_style",
+  "technical_context",
+  "temporary_context",
+]);
 
 const PERSONAS: Record<string, string> = {
   analyst:
@@ -151,8 +176,10 @@ export async function generateReply(params: {
 
     const botName = await db.getBotName(guildId);
     const persona = await db.getPersona(userId, guildId);
-    const memories = await db.getMemories(userId, guildId);
+    const memories = await db.getMemoryRecords(userId, guildId);
+    const userPreferences = await db.getPreferences(userId, guildId);
     const traits = await db.getTraits(userId, guildId);
+    const conversationMode = inferConversationMode(content).mode;
 
     const history = await conversationStore.getHistory(context);
     const contextResult = buildConversationContext({
@@ -164,6 +191,8 @@ export async function generateReply(params: {
           }
         : undefined,
       traits,
+      userPreferences,
+      conversationMode,
       memories,
       history,
       currentMessage: content,
@@ -181,6 +210,12 @@ export async function generateReply(params: {
 
     const response = validatePrimaryResponse(completion);
 
+    if (contextResult.selectedMemoryIds.length > 0) {
+      void db
+        .markMemoriesUsed(userId, guildId, contextResult.selectedMemoryIds)
+        .catch(() => {});
+    }
+
     // Persist updated history (cap at 20 messages = 10 exchanges)
     const updatedHistory = [
       ...history,
@@ -191,6 +226,19 @@ export async function generateReply(params: {
 
     // Fire memory extraction in the background — never blocks the reply
     void extractMemories(userId, guildId, content, response);
+    void db
+      .recordPreferenceSignals(
+        userId,
+        guildId,
+        detectPreferenceSignals(content),
+      )
+      .catch((error) => {
+        console.error("[Assistant ₯] Preference adaptation failed", {
+          operation: "preference_adaptation",
+          category: "persistence",
+          error: error instanceof Error ? error.message : "unknown",
+        });
+      });
 
     let personaLabel: string | undefined;
     if (persona) {
@@ -218,6 +266,16 @@ function createMemoryResponseError(
 }
 
 export function parseMemoryCandidates(raw: unknown): string[] {
+  return parseMemoryCandidateRecords(raw).map((candidate) => candidate.content);
+}
+
+function normalizeMemoryType(value: unknown): MemoryType {
+  return typeof value === "string" && MEMORY_TYPES.has(value as MemoryType)
+    ? (value as MemoryType)
+    : "fact";
+}
+
+export function parseMemoryCandidateRecords(raw: unknown): MemoryCandidate[] {
   if (typeof raw !== "string") {
     throw createMemoryResponseError("malformed_response");
   }
@@ -243,15 +301,40 @@ export function parseMemoryCandidates(raw: unknown): string[] {
     throw createMemoryResponseError("malformed_response");
   }
 
-  return parsed.flatMap((value) => {
-    if (typeof value !== "string") return [];
+  return parsed.flatMap((value): MemoryCandidate[] => {
+    const candidate =
+      typeof value === "string"
+        ? { content: value }
+        : typeof value === "object" && value !== null
+          ? {
+              content: (value as { content?: unknown }).content,
+              memoryType: normalizeMemoryType(
+                (value as { memoryType?: unknown }).memoryType ??
+                  (value as { type?: unknown }).type,
+              ),
+              confidence: (value as { confidence?: unknown }).confidence,
+            }
+          : null;
+    if (!candidate || typeof candidate.content !== "string") return [];
 
-    const fact = value.trim();
+    const fact = candidate.content.trim();
     if (!fact || fact === "..." || fact.length > MAX_MEMORY_LENGTH) {
       return [];
     }
 
-    return [fact];
+    const confidence =
+      typeof candidate.confidence === "number" &&
+      Number.isFinite(candidate.confidence)
+        ? Math.max(0.1, Math.min(0.99, candidate.confidence))
+        : undefined;
+    return [
+      {
+        content: fact,
+        memoryType: candidate.memoryType,
+        confidence,
+        source: "conversation",
+      },
+    ];
   });
 }
 
@@ -277,50 +360,66 @@ export async function extractMemories(
 ): Promise<void> {
   const createCompletion =
     dependencies.createCompletion ?? createGroqCompletion;
-  const addMemories =
-    dependencies.addMemories ??
-    ((ownerId, ownerGuildId, facts) =>
-      db.addMemories(ownerId, ownerGuildId, facts));
+  const extractionTimeoutMs =
+    dependencies.memoryExtractionTimeoutMs ?? MEMORY_EXTRACTION_TIMEOUT_MS;
 
   let completion: unknown;
   try {
-    completion = await createCompletion(
-      {
-        model: TEXT_MODEL,
-        messages: [
-          {
-            role: "system",
-            content:
-              'You maintain a small, useful memory of the user. Extract only concrete, durable personal facts the user explicitly stated about themselves or explicitly asked the assistant to remember. Return ONLY a valid JSON array of short strings. Examples: ["prefers dark mode","works as a nurse","lives in Tokyo"]. Do not save questions, one-off tasks, sensitive personal data, guesses, assistant claims, temporary moods, secrets, or facts about other people. If nothing concrete was learned, return [].',
-          },
-          {
-            role: "user",
-            content: `User said: "${userMsg}"\nAssistant replied: "${assistantMsg}"`,
-          },
-        ],
-        max_tokens: 150,
-      },
-      { requestType: "memory" },
-    );
+    completion = await Promise.race([
+      createCompletion(
+        {
+          model: TEXT_MODEL,
+          messages: [
+            {
+              role: "system",
+              content:
+                'You maintain a small, useful memory of the user. Extract only concrete, durable personal facts the user explicitly stated about themselves or explicitly asked the assistant to remember. Return ONLY a valid JSON array. Each item may be a short string or an object with content, memoryType, and confidence. Use memoryType values preference, interest, project, goal, fact, communication_style, technical_context, or temporary_context. Prefer confidence from 0.5 to 0.95. Do not save questions, one-off tasks, sensitive personal data, guesses, assistant claims, temporary moods, secrets, or facts about other people. If nothing concrete was learned, return [].',
+            },
+            {
+              role: "user",
+              content: `User said: "${userMsg}"\nAssistant replied: "${assistantMsg}"`,
+            },
+          ],
+          max_tokens: 180,
+        },
+        { requestType: "memory" },
+      ),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Memory extraction timed out")),
+          extractionTimeoutMs,
+        ),
+      ),
+    ]);
   } catch (error) {
     logMemoryFailure(error, "unknown");
     return;
   }
 
-  let facts: string[];
+  let candidates: MemoryCandidate[];
   try {
     const shape = completion as MemoryCompletionShape | null;
     const raw = shape?.choices?.[0]?.message?.content;
-    facts = parseMemoryCandidates(raw);
+    candidates = parseMemoryCandidateRecords(raw);
   } catch (error) {
     logMemoryFailure(error, "malformed_response");
     return;
   }
 
-  if (facts.length === 0) return;
+  if (candidates.length === 0) return;
 
   try {
-    await addMemories(userId, guildId, facts);
+    if (dependencies.addMemoryCandidates) {
+      await dependencies.addMemoryCandidates(userId, guildId, candidates);
+    } else if (dependencies.addMemories) {
+      await dependencies.addMemories(
+        userId,
+        guildId,
+        candidates.map((candidate) => candidate.content),
+      );
+    } else {
+      await db.addMemoryCandidates(userId, guildId, candidates);
+    }
   } catch (error) {
     logMemoryFailure(error, "persistence");
   }

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractMemories, parseMemoryCandidates } from "./conversation.js";
+import {
+  extractMemories,
+  parseMemoryCandidateRecords,
+  parseMemoryCandidates,
+} from "./conversation.js";
 
 function completion(content: unknown) {
   return {
@@ -12,6 +16,22 @@ test("accepts valid memory arrays and normalizes whitespace", () => {
   assert.deepEqual(
     parseMemoryCandidates('```json\n["  likes cats  ", "builds bots"]\n```'),
     ["likes cats", "builds bots"],
+  );
+});
+
+test("preserves structured memory type and confidence metadata", () => {
+  assert.deepEqual(
+    parseMemoryCandidateRecords(
+      '[{"content":"building a Discord bot","memoryType":"project","confidence":0.91}]',
+    ),
+    [
+      {
+        content: "building a Discord bot",
+        memoryType: "project",
+        confidence: 0.91,
+        source: "conversation",
+      },
+    ],
   );
 });
 
@@ -103,6 +123,21 @@ test("memory extraction failures never reject or alter the primary flow", async 
         addMemories: async () => {
           throw new Error("database unavailable");
         },
+      },
+    ),
+  );
+});
+
+test("memory extraction has a bounded timeout", async () => {
+  await assert.doesNotReject(
+    extractMemories(
+      "user-timeout",
+      "guild-timeout",
+      "I like cats",
+      "Noted.",
+      {
+        createCompletion: () => new Promise(() => {}),
+        memoryExtractionTimeoutMs: 5,
       },
     ),
   );

@@ -23,15 +23,26 @@ export default {
   once: false,
   async execute(message: Message) {
     if (message.author.bot) return;
-    if (!message.guild) return;
 
     const userId = message.author.id;
-    const guildId = message.guild.id;
-    const guildConfig = await db.getGuildConfig(guildId);
+    const guildId = message.guild?.id ?? "dm";
+    let guildConfig: Awaited<ReturnType<typeof db.getGuildConfig>> = null;
+    try {
+      if (message.guild) guildConfig = await db.getGuildConfig(guildId);
+    } catch (error) {
+      console.error("[Assistant ₯] Message configuration lookup failed", {
+        operation: "guild_config",
+        category: "persistence",
+        error: error instanceof Error ? error.message : "unknown",
+      });
+      return;
+    }
     const botUser = message.client.user;
 
     // ── Automod ───────────────────────────────────────────────────────────────
     let violation: string | null = null;
+
+    if (message.guild) {
 
     // 1. Spam detection
     const spamKey = `${userId}:${guildId}`;
@@ -133,14 +144,16 @@ export default {
       }
       return; // Do not respond conversationally to deleted messages
     }
+    }
 
     // ── Conversation: mention or bot channel ─────────────────────────────────
     if (!botUser) return;
 
     const mentioned =
-      message.mentions.users.has(botUser.id) &&
-      !message.content.startsWith("@everyone") &&
-      !message.content.startsWith("@here");
+      !message.guild ||
+      (message.mentions.users.has(botUser.id) &&
+        !message.content.startsWith("@everyone") &&
+        !message.content.startsWith("@here"));
 
     const inBotChannel =
       guildConfig?.botChannelIds?.includes(message.channelId) ?? false;
@@ -155,7 +168,9 @@ export default {
     if (content.length > 2000) content = content.slice(0, 2000);
 
     // Show typing indicator while processing
-    await (message.channel as TextChannel).sendTyping().catch(() => {});
+    if ("sendTyping" in message.channel) {
+      await (message.channel as TextChannel).sendTyping().catch(() => {});
+    }
 
     let result: Awaited<ReturnType<typeof generateReply>>;
     try {
@@ -185,13 +200,19 @@ export default {
       return;
     }
 
-    const embed = createEmbed(result.botName, result.text.slice(0, 4096));
-    if (result.personaLabel) {
-      embed.setFooter({ text: `Persona: ${result.personaLabel}` });
-    }
-
     try {
-      await message.reply({ embeds: [embed] });
+      const chunks = splitDiscordResponse(result.text);
+      for (const [index, chunk] of chunks.entries()) {
+        const embed = createEmbed(result.botName, chunk);
+        if (result.personaLabel) {
+          embed.setFooter({ text: `Persona: ${result.personaLabel}` });
+        }
+        if (index === 0) {
+          await message.reply({ embeds: [embed] });
+        } else if ("send" in message.channel) {
+          await message.channel.send({ embeds: [embed] });
+        }
+      }
     } catch {
       console.error("[messageCreate:conversation]", {
         operation: "discord_delivery",
@@ -200,3 +221,20 @@ export default {
     }
   },
 } satisfies Event;
+
+export function splitDiscordResponse(
+  text: string,
+  maxLength = 4096,
+): string[] {
+  if (text.length <= maxLength) return [text];
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > maxLength) {
+    const boundary = remaining.lastIndexOf("\n", maxLength);
+    const splitAt = boundary > Math.floor(maxLength * 0.6) ? boundary : maxLength;
+    chunks.push(remaining.slice(0, splitAt).trimEnd());
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
