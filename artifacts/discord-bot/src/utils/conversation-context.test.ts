@@ -70,6 +70,23 @@ test("builds sections in stable prompt order and skips empty optional sections",
   assert.equal(result.currentMessageExceedsBudget, false);
 });
 
+test("turns the short friend persona into an observable conversational style", () => {
+  const result = buildConversationContext({
+    botName: "Assistant ₯",
+    persona: { personaName: "custom", customDescription: "friend" },
+    history: [],
+    currentMessage: "how are you?",
+  });
+  const personaSection = result.messages.find((message) =>
+    message.content.startsWith("Persona:"),
+  );
+
+  assert.ok(personaSection);
+  assert.match(personaSection.content, /warm, casual, and genuinely conversational/);
+  assert.match(personaSection.content, /natural contractions/);
+  assert.match(personaSection.content, /Active persona/);
+});
+
 test("preserves the current message exactly, including when it is oversized", () => {
   const currentMessage = "x".repeat(INPUT_TOKEN_BUDGET * 4);
   const result = buildConversationContext({
